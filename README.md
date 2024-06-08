@@ -23,6 +23,13 @@ text chunks to the seamless model for translation. The batching will help with t
 If the client does not specify the source language of the document, the BLS deployment
 will first send the document to the fasttext language identification model.
 
+After the end of each tutorial session (i.e., branch), we will use some
+[Spanish news articles](https://www.kaggle.com/datasets/kevinmorgado/spanish-news-classification)
+to measure the servers throughput performance. This data is stored in the data
+directory and follows the formatting need for the
+[perf_analyzer](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/client/src/c%2B%2B/perf_analyzer/docs/README.html)
+cli provided by Triton Inference Server.
+
 ## Triton Inference Server
 Triton Inference Server enables teams to deploy AI models from various frameworks,
 including deep learning and machine learning, across multiple devices and platforms,
