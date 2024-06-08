@@ -92,3 +92,11 @@ $ cd ../seamless-m4t-v2-large
 $ conda env create -f environment.yml
 $ conda-pack -n seamless-m4t-v2-large
 ```
+
+## Next
+In the next tutorial, v1 branch, we will create a basic translation service by defining
+the config.pbtxt & model.py files for both models. In addition, we will add the
+service level deployment, translate, that will be the main deployment that we want clients
+to send their data to.
+
+So let's switch to the v1 branch and get started.
