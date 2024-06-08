@@ -1,0 +1,8 @@
+name: fasttext-language-identification
+channels:
+    - conda-forge
+    - defaults
+dependencies:
+    - python==3.10.12
+    - fasttext
+    - huggingface_hub
