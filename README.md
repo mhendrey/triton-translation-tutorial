@@ -15,6 +15,14 @@ Key concepts that will be covered:
   * Enable Dynamic Batching
   * Use the provided (in the SDK container) perf_analyzer to measure performance of the deployment
 
+## Overall Goal
+We will build a service that let's a client send a document that needs to be translated
+to the BLS endpoint. Since the document will likely be too long for SeamlessM4T to
+process, the BLS deployment will handle document chunking and then submit a batch of
+text chunks to the seamless model for translation. The batching will help with throughput.
+If the client does not specify the source language of the document, the BLS deployment
+will first send the document to the fasttext language identification model.
+
 ## Triton Inference Server
 Triton Inference Server enables teams to deploy AI models from various frameworks,
 including deep learning and machine learning, across multiple devices and platforms,
