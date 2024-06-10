@@ -1,0 +1,21 @@
+name: "translate"
+backend: "python"
+max_batch_size: 0
+default_model_filename: "translate.py"
+
+input [
+  {
+    name: "INPUT_TEXT"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+output [
+  {
+    name: "TRANSLATED_TEXT"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+instance_group [{ kind: KIND_CPU }]

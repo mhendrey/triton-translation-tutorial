@@ -1,0 +1,36 @@
+name: "seamless-m4t-v2-large"
+backend: "python"
+max_batch_size: 0
+default_model_filename: "seamless-m4t-v2-large.py"
+
+input [
+  {
+    name: "INPUT_TEXT"
+    data_type: TYPE_STRING
+    dims: [-1]
+  },
+  {
+    name: "SRC_LANG",
+    data_type: TYPE_STRING
+    dims: [1]
+  },
+  {
+    name: "TGT_LANG",
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+output [
+  {
+    name: "TRANSLATED_TEXT"
+    data_type: TYPE_STRING
+    dims: [-1]
+  }
+]
+
+parameters: {
+  key: "EXECUTION_ENV_PATH",
+  value: {string_value: "$$TRITON_MODEL_DIRECTORY/seamless-m4t-v2-large.tar.gz"}
+}
+
+instance_group [{ kind: KIND_GPU }]
