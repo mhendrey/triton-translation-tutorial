@@ -454,11 +454,48 @@ requests. Each requests has you specify the input data you are sending which inc
 "data": ["spa"],
 ```
 
-Let's do a coupule of example requests sending data to each of our three deployments.
-We can use an example found the in the data directory. This directory contains two
-JSON files that is structured to work with the `perf_analyzer` CLI provided by NVIDIA.
+## Triton Performance Analyzer
+The [Triton Performance Analyzer](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/client/src/c%2B%2B/perf_analyzer/README.html#triton-performance-analyzer)
+is a CLI tool which can help you measure and optimize the inference performance of
+your Triton Inference Server. It is available in the SDK container we all ready pulled.
+The documentation says you can try `pip install tritonclient` which should have it, but
+that you will likely be missing necessary system libraries. They weren't wrong. I tried
+on my Ubuntu machine and no luck.
 
 ```
-import json, requests
+$ docker run --rm -it --net host -v ./data:/workspace/data nvcr.io/nvidia/tritonserver:24.04-py3-sdk
+```
+This starts up the container and mounts the repo's /data directory which contains the
+load testing data we will use. There are a bunch of features in this, but we will
+try to keep to this tutorial's ethos, keep it as simple as possible.
+
+From inside the SDK container, let's give the following command a try. We will kick
+off the command and then talk about it's pieces while we wait.
 
 ```
+sdk:/workspace# perf_analyzer \
+  -m translate \
+  --input-data data/spanish-news.json \
+  --measurement-mode=count_windows \
+  --measurement-request-count=20 \
+  --request-rate-range=0.25:4.0:0.1 \
+  --latency-threshold=5000 \
+  --max-threads=16 \
+  --binary-search \
+  --bls-composing-models=fasttext-language-identification,seamless-m4t-v2-large
+```
+
+As you can see perf_analyzer takes many [arguments](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/client/src/c%2B%2B/perf_analyzer/docs/cli.html#perf-analyzer-cli). Here are the ones that I'm using
+
+* -m : Specifies the deployment to analye
+* --input-data : You can provide your own data, otherwise it will generate random data
+* --measurement-mode : Measure for a set number of requests. You could also do time
+* --measurement-request-count : Minimum number of requests in the count_window
+* --request-rate-range : Gives the min:max:step that will be used in binary search
+* --latency-threshold : Maximum time in ms before request rate considered too fast
+* --max-threads : Number of threads to use to send the requests
+* --binary-search : Perform search between request-rate-range specified
+* --bls-composing-models : Gives break down by these models too
+
+This will use a binary search to find what request rate the translate deployment can
+handle while keeping the latency below 5 seconds.
