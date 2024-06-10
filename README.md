@@ -3,17 +3,17 @@ This tutorial will specify a minimal config.pbtxt file and Python code to have a
 working version of our machine translation service. The service will consist of three
 different deployment packages: 
 
+* fasttext-language-identification: Identify the language of text sent
+* seamless-m4t-v2-large: Translate the input text from the source language to the
+  specified target language
 * translate: This is our BLS deployment that serves as the primary interface for
   clients to allow them to send an entire document for translation
   * If the source language is not provided in the client request, send the document
     to fasttext-language-identification to determine it
   * Chunk the document into pieces that can be processed by SeamlessM4T
-  * Submit a document's text chunks for translation
+  * Submit a document's text chunks, source language, and target language for
+    translation
   * Combine translated chunks back together to be returned to the client
-* fasttext-language-identification: Identify the source language of text sent to
-  the deployment
-* seamless-m4t-v2-large: Translate the input text from the source language to the
-  specified target language
 
 ## config.pbtxt
 The config.pbtxt file is a ModelConfig protobuf that provides required and optional
