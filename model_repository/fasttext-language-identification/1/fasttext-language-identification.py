@@ -14,11 +14,19 @@ class TritonPythonModel:
     def initialize(self, args):
         self.model_config = model_config = json.loads(args["model_config"])
 
-        # Get SRC_LANG configuration
-        output_config = pb_utils.get_output_config_by_name(model_config, "SRC_LANG")
+        # Get output configs
+        src_lang_config = pb_utils.get_output_config_by_name(model_config, "SRC_LANG")
+        src_script_config = pb_utils.get_output_config_by_name(
+            model_config, "SRC_SCRIPT"
+        )
 
-        # Convert Triton types to numpy types
-        self.output_dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
+        # Convert Triton types to numpy types for output data
+        self.src_lang_dtype = pb_utils.triton_string_to_numpy(
+            src_lang_config["data_type"]
+        )
+        self.src_script_dtype = pb_utils.triton_string_to_numpy(
+            src_script_config["data_type"]
+        )
 
         """Load the model into CPU RAM"""
         model_path = hf_hub_download(
@@ -46,8 +54,7 @@ class TritonPythonModel:
         """
         responses = []
         for request in requests:
-            # Get INPUT_TEXT, this is a Triton Tensor
-            # Using TritonError is a way to send any error messages back to the client
+            # Get INPUT_TEXT from request. This is a Triton Tensor
             try:
                 input_text_tt = pb_utils.get_input_tensor_by_name(request, "INPUT_TEXT")
             except Exception as exc:
@@ -58,9 +65,9 @@ class TritonPythonModel:
                 )
                 responses.append(response)
                 continue
-            # Convert to Python str
-            # Though config.pbtxt specifies datatype as TYPE_STRING when sending
-            # through a request it is BYTES. Thus must be decoded.
+            # Convert Triton Tensor (TYPE_STRING) to numpy (dtype=np.object_)
+            # Array has just one element (config.pbtxt has dims: [1])
+            # TYPE_STRING is bytes when sending through a request. Decode to get str
             input_text = input_text_tt.as_numpy()[0].decode("utf-8")
             # Replace newlines with ' '. FastText breaks on \n
             input_text_cleaned = self.REMOVE_NEWLINE.sub(" ", input_text)
@@ -75,16 +82,20 @@ class TritonPythonModel:
                 responses.append(response)
                 continue
             # Take just the first one because we used k = 1 in predict()
-            # Returns '__label__<lang_id>_<script>' but SeamlessM4T uses just lang_id
-            src_lang = output_labels[0].replace("__label__", "").split("_")[0]
+            # Returns '__label__<lang_id>_<script>', e.g., '__label__spa_Latn'
+            src_lang, src_script = output_labels[0].replace("__label__", "").split("_")
 
             # Make Triton Inference Response
             src_lang_tt = pb_utils.Tensor(
                 "SRC_LANG",
-                np.array([src_lang], dtype=self.output_dtype),
+                np.array([src_lang], dtype=self.src_lang_dtype),
+            )
+            src_script_tt = pb_utils.Tensor(
+                "SRC_SCRIPT",
+                np.array([src_script], dtype=self.src_script_dtype),
             )
             response = pb_utils.InferenceResponse(
-                output_tensors=[src_lang_tt],
+                output_tensors=[src_lang_tt, src_script_tt],
             )
             responses.append(response)
 

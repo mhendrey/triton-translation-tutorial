@@ -13,12 +13,24 @@ class TritonPythonModel:
 
     def initialize(self, args):
         self.model_config = model_config = json.loads(args["model_config"])
+
+        # Get INPUT_TEXT configuration
+        input_text_config = pb_utils.get_input_config_by_name(
+            model_config, "INPUT_TEXT"
+        )
+        # Convert Triton types to numpy types
+        self.input_text_dtype = pb_utils.triton_string_to_numpy(
+            input_text_config["data_type"]
+        )
+
         # Get TRANSLATED_TEXT configuration
-        output_config = pb_utils.get_output_config_by_name(
+        translated_text_config = pb_utils.get_output_config_by_name(
             model_config, "TRANSLATED_TEXT"
         )
         # Convert Triton types to numpy types
-        self.output_dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
+        self.translated_text_dtype = pb_utils.triton_string_to_numpy(
+            translated_text_config["data_type"]
+        )
 
     def execute(self, requests: List) -> List:
         """
@@ -58,8 +70,12 @@ class TritonPythonModel:
             tgt_lang = request_params.get("tgt_lang", "eng")
             tgt_lang_tt = pb_utils.Tensor("TGT_LANG", np.array([tgt_lang], np.object_))
 
-            # If the lang_id isn't passed in, then run language id model to set it
-            if not src_lang:
+            # If src_lang provide in request, then use it, else use FastText to get it
+            if src_lang:
+                src_lang_tt = pb_utils.Tensor(
+                    "SRC_LANG", np.array([src_lang], np.object_)
+                )
+            else:
                 # Create inference request object
                 infer_lang_id_request = pb_utils.InferenceRequest(
                     model_name="fasttext-language-identification",
@@ -70,17 +86,17 @@ class TritonPythonModel:
                 # Peform synchronous blocking inference request
                 infer_lang_id_response = infer_lang_id_request.exec()
                 if infer_lang_id_response.has_error():
-                    raise pb_utils.TritonModelException(
-                        infer_lang_id_response.error().message()
+                    response = pb_utils.InferenceResponse(
+                        error=pb_utils.TritonError(
+                            f"{infer_lang_id_response.error().message()}"
+                        )
                     )
+                    responses.append(response)
+                    continue
 
                 # Get the lang_id
                 src_lang_tt = pb_utils.get_output_tensor_by_name(
                     infer_lang_id_response, "SRC_LANG"
-                )
-            else:
-                src_lang_tt = pb_utils.Tensor(
-                    "SRC_LANG", np.array([src_lang], np.object_)
                 )
 
             # Chunk up the input_text_tt into pieces for translation
@@ -95,9 +111,13 @@ class TritonPythonModel:
             # Perform synchronous blocking inference request
             infer_seamless_response = infer_seamless_request.exec()
             if infer_seamless_response.has_error():
-                raise pb_utils.TritonModelException(
-                    infer_seamless_response.error().message()
+                response = pb_utils.InferenceResponse(
+                    error=pb_utils.TritonError(
+                        f"{infer_seamless_response.error().message()}"
+                    )
                 )
+                responses.append(response)
+                continue
 
             # Get translated chunks
             translated_chunks_tt = pb_utils.get_output_tensor_by_name(
@@ -136,7 +156,9 @@ class TritonPythonModel:
             if chunk:
                 chunks.append(f"{chunk}.")  # put . back on
 
-        chunks_tt = pb_utils.Tensor("INPUT_TEXT", np.array(chunks, dtype=np.object_))
+        chunks_tt = pb_utils.Tensor(
+            "INPUT_TEXT", np.array(chunks, dtype=self.translated_text_dtype)
+        )
         return chunks_tt
 
     def combine_translated_chunks(
@@ -162,6 +184,7 @@ class TritonPythonModel:
         ]
         translated_doc = " ".join(translated_chunks)
         translated_doc_tt = pb_utils.Tensor(
-            "TRANSLATED_TEXT", np.array([translated_doc], np.object_)
+            "TRANSLATED_TEXT",
+            np.array([translated_doc], dtype=self.translated_text_dtype),
         )
         return translated_doc_tt

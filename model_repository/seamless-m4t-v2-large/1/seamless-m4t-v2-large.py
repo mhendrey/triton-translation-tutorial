@@ -14,11 +14,13 @@ class TritonPythonModel:
     def initialize(self, args):
         self.model_config = model_config = json.loads(args["model_config"])
         # Get TRANSLATED_TEXT configuration
-        output_config = pb_utils.get_output_config_by_name(
+        translated_text_config = pb_utils.get_output_config_by_name(
             model_config, "TRANSLATED_TEXT"
         )
         # Convert Triton types to numpy types
-        self.output_dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
+        self.translated_text_dtype = pb_utils.triton_string_to_numpy(
+            translated_text_config["data_type"]
+        )
 
         # Use the GPU if available, otherwise use the CPU
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -130,7 +132,7 @@ class TritonPythonModel:
             # Convert to TritonTensor & make the TritonInferenceResponse
             translated_text_tt = pb_utils.Tensor(
                 "TRANSLATED_TEXT",
-                np.array(translated_text, dtype=self.output_dtype),
+                np.array(translated_text, dtype=self.translated_text_dtype),
             )
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[translated_text_tt],

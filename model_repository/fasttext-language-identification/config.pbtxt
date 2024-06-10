@@ -15,6 +15,11 @@ output [
         name: "SRC_LANG"
         data_type: TYPE_STRING
         dims: [1]
+    },
+    {
+        name: "SRC_SCRIPT"
+        data_type: TYPE_STRING
+        dims: [1]
     }
 ]
 

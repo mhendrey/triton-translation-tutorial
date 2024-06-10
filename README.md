@@ -31,9 +31,10 @@ of the input or output ***must*** match the name expected by the model in your .
 file.
 
 ### FastText Language Identification
-This will be the simplest of the config.pbtxt files since the model will expect just
-a single string be sent to it and it will return a single string. This model is tiny,
-fast, and doesn't need a GPU.
+The model will expect just a single string be sent to it and it will return two
+strings, the language identified and the script. For Seamless, we only need the
+language id, but some other use case may need both. This model is tiny, fast, and
+doesn't need a GPU.
 
 Let's review the different parts of the file. We start with the required name and
 backend fields. For this whole tutorial, we use the Python backend. We specify
@@ -65,7 +66,7 @@ The last thing we need to specify is the dims section. This is the number of
 dimensions of the input data. For this model, we are going to send just a 1-d array
 that has just one element in. This will be the entire contents of the document. A
 future improvement, that will be left to the student, would be to run language
-identification on the different chunks of the document better handle documents that
+identification on the different chunks of the document to better handle documents that
 contain more than one language in them.
 
 ```
@@ -78,13 +79,19 @@ input [
 ]
 ```
 
-The output field mirrors the input field since the model will send back just a single
-answer, that is, it's best guess as to the language of the submitted text.
+The output fields mirrors the input field since the model will send back just a single
+answer, that is, it's best guess as to the language id and script of the submitted
+text.
 
 ```
 output [
     {
         name: "SRC_LANG"
+        data_type: TYPE_STRING
+        dims: [1]
+    },
+    {
+        name: "SRC_SCRIPT"
         data_type: TYPE_STRING
         dims: [1]
     }
@@ -109,8 +116,8 @@ leverage the parallel processing available in a GPU, these chunks should be subm
 as a 1-d list of variable length size for best performance and then have the
 corresponding translated text chunks returned. Remember, we will let the BLS deployment
 handle the chunking of the client's document. In addition, for this simple tutorial, we
-will assume the documents are too long to cause memory issues. Otherwise, the BLS code
-will need to handle that logic as well.
+will assume the documents are not too long to cause memory issues. Otherwise, the BLS
+code will need to handle that logic as well.
 
 As a result, the biggest difference will be the dims of the input text and output.
 For the FastText model we expected just one element to be sent, hence the `[1]`. But
@@ -157,8 +164,9 @@ class TritonPythonModel:
     def execute(self, requests):
         """
         Must be implemented. Process incoming requests and return responses.
-        There must be a response for each request, but you can return TritonError
-        instead of a InferenceResponse if something went wall for the client.
+        There must be a response for each request, but you can return an 
+        InferenceResponse that is a TritonError back to the client if something went
+        wrong. This way the client gets the error message.
 
         Parameters
         ----------
@@ -192,26 +200,265 @@ undocumented, hidden Python package.
 As expected, the `initialize()` loads the FastText model into memory. In addition, we
 use the `pb_utils.get_output_config_by_name()` and `pb_utils.triton_string_to_numpy()`
 in conjunction to save off the corresponding numpy dtype (np.object_ in this case) for
-the SRC_LANG output variable. In the config.pbtxt, we had stated the data type was
+the SRC_LANG & SRC_SCRIPT outputs. In the config.pbtxt, we had stated the data type was
 TYPE_STRING. This is just a convenience for when we go to make the `InferenceResponse`.
 
 In the `execute()` method, we loop through the list of requests and handle them one at
 a time. This shows the basic pattern that we will use for nearly any model. NOTE: this
-may not be the most optimized, but it certain is the simplest.
+may not be the most optimized, but it certain is the simplest. For each request, we
+start by getting the data that was sent. We put this into a try/except which enables
+sending an input data error message back through the response.
 
-* Get the input data as Triton Tensors from the request
-* If we have an error, create an `InferenceResponse` that has a `TritonError` that
-  will be sent back to the client. This is a nice feature to communicate that the
-  client sent some bad data.
-* Convert the Triton Tensor(s) to more useful objects, mostly through conversion to
-  numpy arrays
-* Run the input through the model to obtain output data
-* Convert the output into a Triton Tensor & make an `InferenceResponse` using that
-  Triton Tensor
-* Append the `InferenceResponse` to `responses` list
-* Return `responses`
+```
+try:
+    input_text_tt = pb_utils.get_input_tensor_by_name(request, "INPUT_TEXT")
+except Exception as exc:
+    response = pb_utils.InferenceResponse(
+        error=pb_utils.TritonError(
+            f"{exc}", pb_utils.TritonError.INVALID_ARG
+        )
+    )
+    responses.append(response)
+    continue
+
+```
+
+Notice that we retrieve the needed data by the name. This is the name given in the
+config.pbtxt file. The input_text_tt is a `pb_utils.Tensor` so we next convert that
+to a more amenable type. The `pb_utils.Tensor` has the `as_numpy()` method to easily
+convert to more standard numpy arrays. Since that the config.pbtxt specifies that
+INPUT_TEXT has `dims: [1]`, we have just a 1-d numpy array that has just a single
+element. Given that config.pbtxt for INPUT_TEXT set `data_type: TYPE_STRING` you
+would think that the resulting numpy array had strings. It does **not**. The array
+contains `bytes` and must thus be decoded.
+
+```
+input_text = input_text_tt.as_numpy()[0].decode("utf-8")
+# Replace newlines with ' '. FastText breaks on \n
+input_text_cleaned = self.REMOVE_NEWLINE.sub(" ", input_text)
+```
+
+With the data in a format/type that the FastText model can handle, we call the model
+to predict the language and script of the input text.
+
+```
+try:
+    output_labels, _ = self.model.predict(input_text_cleaned, k=1)
+except Exception as exc:
+    response = pb_utils.InferenceResponse(
+        error=pb_utils.TritonError(f"{exc}")
+    )
+    responses.append(response)
+    continue
+src_lang, src_script = output_labels[0].replace("__label__", "").split("_")
+```
+Once again we wrap this in try/except. If we encounter any error, we pass that error
+back to the client via the `InferenceResponse`. We take the resulting output and get
+the top source language and script predicted.
+
+Finally, we need wrap the model's outputs into `pb_utils.Tensor` and put them into
+the `pb_utils.InferenceResponse` to be sent back to the client.
+
+```
+src_lang_tt = pb_utils.Tensor(
+    "SRC_LANG",
+    np.array([src_lang], dtype=self.src_lang_dtype),
+)
+src_script_tt = pb_utils.Tensor(
+    "SRC_SCRIPT",
+    np.array([src_script], dtype=self.src_script_dtype),
+)
+response = pb_utils.InferenceResponse(
+    output_tensors=[src_lang_tt, src_script_tt],
+)
+```
 
 One of the unspoken, undocumented features is how the Triton Inference Server knows to
 send what response back to which request. As far as I can tell, this is why the
 documentation states that the input list of requests and output list of responses need
 to the same length. Presumably they need to be the same order too.
+
+### SeamlessM4Tv2Large
+Based upon the associated config.pbtxt, the SeamlessM4Tv2Large deployment is expecting
+to be sent a 1-d array of variable length strings (INPUT_TEXT), a 1-d array of just
+one element specifying the source language (SRC_LANG), and a 1-d array of just
+one element specifying the target language (TGT_LANG).
+
+The `initialize()` method looks similar to the FastText deployment, but we do take
+some care with the loading this onto a GPU. For this model, we need to run both a
+processor (handles converting text -> pytorch tokens and the reverse) and the model
+itself. Only the model goes onto the GPU.
+
+The `execute()` method also looks very similar. Only the input text is handled a bit
+differently given that it is a 1-d array with more than one element.
+
+### Translate
+With our two underlying models coded up, we turn our attention to the translate
+deployment. This leverages the Business Scripting Logic and allows us to create a more
+client-friendly interface to our machine translation server. Again, we begin with the
+simplest implementation that we can. Specifically, we will use synchronoous implement
+that submits inference requests to the models and waits for their responses back. A
+future improvement would be to make these asynchronous requests that could improve
+throughput.
+
+The `initialize()` method looks very similar to the others except we don't have any
+model that we need to load.
+
+The `execute()` method is where things start looking different from what we have seen
+previously. Of course, we still need to iterate over the requests and gather up their
+corresponding responses. Like before, we begin processing each request by getting the
+intput data out of the client's request. If there is an error here, we capture it and
+include it in the response back to the client.
+
+```
+try:
+    input_text_tt = pb_utils.get_input_tensor_by_name(request, "INPUT_TEXT")
+except Exception as exc:
+    response = pb_utils.InferenceResponse(
+        error=pb_utils.TritonError(
+            f"{exc}", pb_utils.TritonError.INVALID_ARG
+        )
+    )
+    responses.append(response)
+    continue
+```
+
+Next we see an example of processing option request parameters sent by the client. In
+this case, there are two optional parameters, `src_lang` and `tgt_lang`, that a client
+may send. If the `src_lang` isn't provide, then we will use the FastText deployment to
+determine it. If the `tgt_lang` is provide, then the submitted text will be translated
+into that language. Otherwise, it will default to translating into English. Since we
+won't be changing the `tgt_lang`, we make the necessary `pb_utils.Tensor` out of it
+that will be used to send to the SeamlessM4Tv2Large deployment.
+
+```
+request_params = json.loads(request.parameters())
+src_lang = request_params.get("src_lang", None)
+tgt_lang = request_params.get("tgt_lang", "eng")
+tgt_lang_tt = pb_utils.Tensor("TGT_LANG", np.array([tgt_lang], np.object_))
+```
+
+The value of the BLS is it's ability to handle branching logic. We next see an example
+of that. If the client submitted a `src_lang`, then we don't need to call the FastText
+model. If they didn't provide this value, then we get it from FastText. We use
+`pb_utils.InferenceReqeust` to make this call to FastText.
+
+```
+if src_lang:
+    src_lang_tt = pb_utils.Tensor(
+        "SRC_LANG", np.array([src_lang], np.object_)
+    )
+else:
+    # Create inference request object
+    infer_lang_id_request = pb_utils.InferenceRequest(
+        model_name="fasttext-language-identification",
+        requested_output_names=["SRC_LANG"],
+        inputs=[input_text_tt],
+    )
+
+    # Peform synchronous blocking inference request
+    infer_lang_id_response = infer_lang_id_request.exec()
+    if infer_lang_id_response.has_error():
+        response = pb_utils.InferenceResponse(
+            error=pb_utils.TritonError(
+                f"{infer_lang_id_response.error().message()}"
+            )
+        )
+        responses.append(response)
+        continue
+
+    src_lang_tt = pb_utils.get_output_tensor_by_name(
+        infer_lang_id_response, "SRC_LANG"
+    )
+```
+
+In the next code block we break the input text into chunks and then submit them all
+at once to the SeamlessM4Tv2Large deployment. We define a class method
+`chunk_document()`. In this implementation, we do a simplistic splitting based upon
+'.'. This is where future improvements would implement a better chunking strategy.
+At the end we use another class method that we define, `combine_translated_chunks()`
+that recombines the translated chunks back into a single document to send back to the
+client.
+
+```
+# Chunk up the input_text_tt into pieces for translation
+input_chunks_tt = self.chunk_document(input_text_tt)
+# Create inference request object for translation
+infer_seamless_request = pb_utils.InferenceRequest(
+    model_name="seamless-m4t-v2-large",
+    requested_output_names=["TRANSLATED_TEXT"],
+    inputs=[input_chunks_tt, src_lang_tt, tgt_lang_tt],
+)
+
+# Perform synchronous blocking inference request
+infer_seamless_response = infer_seamless_request.exec()
+if infer_seamless_response.has_error():
+    response = pb_utils.InferenceResponse(
+        error=pb_utils.TritonError(
+            f"{infer_seamless_response.error().message()}"
+        )
+    )
+    responses.append(response)
+    continue
+
+# Get translated chunks
+translated_chunks_tt = pb_utils.get_output_tensor_by_name(
+    infer_seamless_response, "TRANSLATED_TEXT"
+)
+# Combine translated chunks
+translated_doc_tt = self.combine_translated_chunks(translated_chunks_tt)
+```
+
+Finally, we make our `pb_utils.InferenceResponse` to send back to the client.
+
+```
+inference_response = pb_utils.InferenceResponse(
+    output_tensors=[translated_doc_tt]
+)
+responses.append(inference_response)
+```
+
+With everything now defined, we are ready to launch our service
+
+## Start Triton Inference Service
+We launch the service from the parent directory using docker compose
+
+```
+$ docker-compose up
+```
+
+This mounts two volumes into the Triton Inference Server container. The first is the
+model repository which contains all the work we just described. The second is the
+location of our local huggingface hub cache directory which we use to load the models.
+
+If we are successful you should see:
+```
+ Started GRPCInferenceService at 0.0.0.0:8001
+ Started HTTPService at 0.0.0.0:8000
+ Started Metrics Service at 0.0.0.0:8002
+```
+
+## Example Request
+Take a look a the client_requests.py in examples/ to see how to structure your
+requests. Each requests has you specify the input data you are sending which includes:
+
+* name - must match what's in the config.pbtxt file
+* shape - The shape of this request. Look at the SeamlessM4Tv2Large example
+* datatype - Since we are using string, this is "BYTES" *shrug*
+* data - Array of the input data
+
+```
+"name": "SRC_LANG",
+"shape": [1],
+"datatype": "BYTES",
+"data": ["spa"],
+```
+
+Let's do a coupule of example requests sending data to each of our three deployments.
+We can use an example found the in the data directory. This directory contains two
+JSON files that is structured to work with the `perf_analyzer` CLI provided by NVIDIA.
+
+```
+import json, requests
+
+```
