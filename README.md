@@ -539,7 +539,7 @@ Request Rate: 0.835938, throughput: 0.844962 infer/sec, latency 1086519 usec
 Request Rate: 0.894531, throughput: 0.869468 infer/sec, latency 1082904 usec
 ```
 
-So, it looks like our target to beat is 0.869 infer/sec. We also so, that the seamless
+So, it looks like our target to beat is 0.869 infer/sec. We also see, that the seamless
 model is where all the time is spent. Not surprising given that is where the bulk of
 the work is being done.
 
@@ -559,3 +559,19 @@ perf_analyzer \
   --max-threads=16 \
   --binary-search
 ```
+
+As we would have hoped, we get the same answers as before. This tells us that we lose
+negligible time going through the translate deployment. That's nice, because what
+client wants to chunk up their documents and always no the source language before
+sending in their request.
+
+```
+Inferences/Second vs. Client Average Batch Latency
+Request Rate: 0.25, throughput: 0.247903 infer/sec, latency 1097453 usec
+Request Rate: 0.71875, throughput: 0.705791 infer/sec, latency 1088433 usec
+Request Rate: 0.835938, throughput: 0.844959 infer/sec, latency 1100355 usec
+Request Rate: 0.894531, throughput: 0.86946 infer/sec, latency 1090506 usec
+```
+
+In the next tutorial, we will explore leveraging Triton Inference Server's dynamic
+batching capability. See in branch v2!
