@@ -475,7 +475,7 @@ off the command and then talk about it's pieces while we wait.
 ```
 sdk:/workspace# perf_analyzer \
   -m translate \
-  --input-data data/spanish-news.json \
+  --input-data data/spanish-news-one.json \
   --measurement-mode=count_windows \
   --measurement-request-count=20 \
   --request-rate-range=0.25:4.0:0.1 \
@@ -499,3 +499,63 @@ As you can see perf_analyzer takes many [arguments](https://docs.nvidia.com/deep
 
 This will use a binary search to find what request rate the translate deployment can
 handle while keeping the latency below 5 seconds.
+
+For the output we get the following
+
+```
+Request Rate: 0.894531 inference requests per seconds
+  Client: 
+    Request count: 60
+    Throughput: 0.869468 infer/sec
+    Avg latency: 1082904 usec (standard deviation 22312 usec)
+    p50 latency: 1088082 usec
+    p90 latency: 1110780 usec
+    p95 latency: 1113430 usec
+    p99 latency: 1115020 usec
+    Avg HTTP time: 1082890 usec (send/recv 120 usec + response wait 1082770 usec)
+  Server: 
+    Inference count: 60
+    Execution count: 60
+    Successful request count: 60
+    Avg request latency: 1082211 usec (overhead 1913 usec + queue 147 usec + compute 1080151 usec)
+
+  Composing models: 
+  fasttext-language-identification, version: 1
+      Inference count: 61
+      Execution count: 61
+      Successful request count: 61
+      Avg request latency: 2648 usec (overhead 7 usec + queue 82 usec + compute input 39 usec + compute infer 2478 usec + compute output 41 usec)
+
+  seamless-m4t-v2-large, version: 1
+      Inference count: 60
+      Execution count: 60
+      Successful request count: 60
+      Avg request latency: 1077663 usec (overhead 6 usec + queue 65 usec + compute input 36 usec + compute infer 1077528 usec + compute output 26 usec)
+
+Inferences/Second vs. Client Average Batch Latency
+Request Rate: 0.25, throughput: 0.247901 infer/sec, latency 1116620 usec
+Request Rate: 0.71875, throughput: 0.705769 infer/sec, latency 1091147 usec
+Request Rate: 0.835938, throughput: 0.844962 infer/sec, latency 1086519 usec
+Request Rate: 0.894531, throughput: 0.869468 infer/sec, latency 1082904 usec
+```
+
+So, it looks like our target to beat is 0.869 infer/sec. We also so, that the seamless
+model is where all the time is spent. Not surprising given that is where the bulk of
+the work is being done.
+
+Since, we aren't sure where we will go for perfomance boosts, let's do a run that
+measures just the seamless-m4t-v2-large deployment. We leave off the 
+`--bls-composing-models` flag (seg faults otherwise, don't ask me how I know). We
+also change the input data since this deployment has different inputs/outputs.
+
+```
+perf_analyzer \
+  -m seamless-m4t-v2-large \
+  --input-data data/spanish-news-seamless-one.json \
+  --measurement-mode=count_windows \
+  --measurement-request-count=20 \
+  --request-rate-range=0.25:4.0:0.1 \
+  --latency-threshold=5000 \
+  --max-threads=16 \
+  --binary-search
+```
