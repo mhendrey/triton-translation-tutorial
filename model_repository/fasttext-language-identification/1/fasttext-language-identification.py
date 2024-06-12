@@ -52,6 +52,8 @@ class TritonPythonModel:
         -------
         List[pb_utils.InferenceResponse]
         """
+        logger = pb_utils.Logger
+        logger.log_warn(f"FastText received {len(requests)} requests")
         responses = []
         for request in requests:
             # Get INPUT_TEXT from request. This is a Triton Tensor
@@ -68,7 +70,7 @@ class TritonPythonModel:
             # Convert Triton Tensor (TYPE_STRING) to numpy (dtype=np.object_)
             # Array has just one element (config.pbtxt has dims: [1])
             # TYPE_STRING is bytes when sending through a request. Decode to get str
-            input_text = input_text_tt.as_numpy()[0].decode("utf-8")
+            input_text = input_text_tt.as_numpy().reshape(-1)[0].decode("utf-8")
             # Replace newlines with ' '. FastText breaks on \n
             input_text_cleaned = self.REMOVE_NEWLINE.sub(" ", input_text)
 
@@ -88,11 +90,11 @@ class TritonPythonModel:
             # Make Triton Inference Response
             src_lang_tt = pb_utils.Tensor(
                 "SRC_LANG",
-                np.array([src_lang], dtype=self.src_lang_dtype),
+                np.array([src_lang], dtype=self.src_lang_dtype).reshape(-1, 1),
             )
             src_script_tt = pb_utils.Tensor(
                 "SRC_SCRIPT",
-                np.array([src_script], dtype=self.src_script_dtype),
+                np.array([src_script], dtype=self.src_script_dtype).reshape(-1, 1),
             )
             response = pb_utils.InferenceResponse(
                 output_tensors=[src_lang_tt, src_script_tt],

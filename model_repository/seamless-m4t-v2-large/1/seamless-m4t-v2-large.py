@@ -62,6 +62,8 @@ class TritonPythonModel:
         -------
         responses: List[pb_utils.InferenceResponse]
         """
+        logger = pb_utils.Logger
+        logger.log_warn(f"Seamless received {len(requests)} requests")
         responses = []
         for request in requests:
             # Get the input data as Triton Tensors
