@@ -1,0 +1,32 @@
+name: "fasttext-language-identification"
+backend: "python"
+max_batch_size: 50
+default_model_filename: "fasttext-language-identification.py"
+
+input [
+    {
+        name: "INPUT_TEXT"
+        data_type: TYPE_STRING
+        dims: [1]
+    }
+]
+output [
+    {
+        name: "SRC_LANG"
+        data_type: TYPE_STRING
+        dims: [1]
+    },
+    {
+        name: "SRC_SCRIPT"
+        data_type: TYPE_STRING
+        dims: [1]
+    }
+]
+
+parameters: {
+  key: "EXECUTION_ENV_PATH",
+  value: {string_value: "$$TRITON_MODEL_DIRECTORY/fasttext-language-identification.tar.gz"}
+}
+instance_group [{kind: KIND_CPU}]
+dynamic_batching: {}
+version_policy: { latest: { num_versions: 1}}

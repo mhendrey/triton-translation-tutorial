@@ -64,6 +64,17 @@ class TritonPythonModel:
                 input_text_tt = pb_utils.get_input_tensor_by_name(request, "INPUT_TEXT")
                 src_lang_tt = pb_utils.get_input_tensor_by_name(request, "SRC_LANG")
                 tgt_lang_tt = pb_utils.get_input_tensor_by_name(request, "TGT_LANG")
+                # Convert TritonTensor -> numpy -> python str
+                # NOTE: Triton converts your input string to bytes so you need to decode
+                input_text = [
+                    b.decode("utf-8") for b in input_text_tt.as_numpy().reshape(-1)
+                ]
+                src_lang = [
+                    b.decode("utf-8") for b in src_lang_tt.as_numpy().reshape(-1)
+                ]
+                tgt_lang = [
+                    b.decode("utf-8") for b in tgt_lang_tt.as_numpy().reshape(-1)
+                ]
             except Exception as exc:
                 response = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(
@@ -72,12 +83,6 @@ class TritonPythonModel:
                 )
                 responses.append(response)
                 continue
-
-            # Convert TritonTensor -> numpy -> python str
-            # NOTE: Triton converts your input string to bytes so you need to decode
-            input_text = [b.decode("utf-8") for b in input_text_tt.as_numpy()]
-            src_lang = [b.decode("utf-8") for b in src_lang_tt.as_numpy()]
-            tgt_lang = [b.decode("utf-8") for b in tgt_lang_tt.as_numpy()]
 
             # Run through the model for translation
             ## Tokenize
@@ -126,7 +131,9 @@ class TritonPythonModel:
             # Convert to TritonTensor & make the TritonInferenceResponse
             translated_text_tt = pb_utils.Tensor(
                 "TRANSLATED_TEXT",
-                np.array(translated_text, dtype=self.translated_text_dtype),
+                np.array(translated_text, dtype=self.translated_text_dtype).reshape(
+                    -1, 1
+                ),
             )
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[translated_text_tt],

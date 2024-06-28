@@ -16,7 +16,7 @@ inference_request_fasttext = {
     "inputs": [
         {
             "name": "INPUT_TEXT",
-            "shape": [1],
+            "shape": [1, 1],
             "datatype": "BYTES",
             "data": [one_sentence],
         }
@@ -34,19 +34,19 @@ inference_request_seamless = {
     "inputs": [
         {
             "name": "INPUT_TEXT",
-            "shape": [1],
+            "shape": [1, 1],
             "datatype": "BYTES",
             "data": [one_sentence],
         },
         {
             "name": "SRC_LANG",
-            "shape": [1],
+            "shape": [1, 1],
             "datatype": "BYTES",
             "data": ["spa"],
         },
         {
             "name": "TGT_LANG",
-            "shape": [1],
+            "shape": [1, 1],
             "datatype": "BYTES",
             "data": ["eng"],
         },
