@@ -75,7 +75,7 @@ sdk:/workspace# perf_analyzer \
   --latency-threshold=5000 \
   --max-threads=50 \
   --binary-search \
-  --v \
+  -v \
   --stability-percentage=25
 ```
 
@@ -151,8 +151,7 @@ to utilize multiple processors. Instead, we will focus our attention to making a
 version, `3`, for the SeamlessM4Tv2 model only. We will follow the basic outline given
 above.
 
-At a high-level, we will loop through the requests and gather up the input data. Here
-we can handle any individual errors that occur and send them back to the client. When
+At a high-level, we will loop through the requests and gather up the input data. When
 we are done, we can create the necessary batches (`input_texts`, `src_langs`,
 `tgt_langs`) to be used.
 
@@ -166,15 +165,50 @@ message back to an individual requestor that might contain data from another use
 Finally, we iterate through all of our successfully run translations and generate the
 Triton Tensor that is to be returned to each requestor.
 
+The main changes from version `2` to version `3` are focused on improving efficiency by
+implementing batch processing. Here are the key differences:
+
+1. Initialization:
+   - `execute_v3` initializes a responses list with None values for all requests upfront.
+   - It also creates separate lists for valid requests and batch inputs.
+
+2. Input Processing:
+   - `execute_v2` processes each request individually in a loop.
+   - `execute_v3` collects all valid inputs into batches (batch_input_text, batch_src_lang, batch_tgt_lang).
+
+3. Error Handling:
+   - `execute_v2` immediately creates and appends error responses for invalid requests.
+   - `execute_v3` skips invalid requests but keeps track of their indices, allowing for batch processing of valid requests.
+
+4. Batch Processing:
+   - `execute_v3` combines all valid inputs into single lists (input_texts, src_langs, tgt_langs) using itertools.chain.
+
+5. Model Operations:
+   - `execute_v2` performs tokenization, generation, and decoding for each request separately.
+   - `execute_v3` performs these operations once on the entire batch of valid requests.
+
+6. Error Propagation:
+   - In `execute_v3`, if an error occurs during batch processing, it's propagated to all valid requests in the batch.
+
+7. Response Creation:
+   - `execute_v2` creates and appends responses sequentially.
+   - `execute_v3` assigns responses to the pre-initialized list using the tracked indices of valid requests.
+
+8. Return Value:
+   - Both methods return a list of responses, but `execute_v3` ensures that the order of responses matches the order of incoming requests, including None or error responses for invalid requests.
+
+These changes allow for more efficient processing of multiple requests by leveraging batch operations, which can significantly improve performance, especially for larger numbers of requests.
+
 ## Performance Analyzer - Part 2
 ```
 sdk:/workspace# perf_analyzer \
   -m seamless-m4t-v2-large \
   --input-data data/spanish-news-seamless-one.json \
   --measurement-interval=200000 \
-  --request-rate-range=26.0:600.0:5.0 \
-  --latency-threshold=2000 \
+  --request-rate-range=40.0:200.0:5.0 \
+  --latency-threshold=5000 \
   --max-threads=400 \
+  --percentile=50 \
   --binary-search \
   -v
 ```
@@ -182,8 +216,61 @@ sdk:/workspace# perf_analyzer \
   -m seamless-m4t-v2-large \
   --input-data data/spanish-news-seamless-one.json \
   --measurement-interval=200000 \
-  --concurrency-range=5:200:5 \
+  --concurrency-range=40:300:5 \
   --latency-threshold=5000 \
   --percentile=50 \
   --binary-search \
   -v
+
+
+```
+sdk:/workspace# perf_analyzer \
+  -m seamless-m4t-v2-large \
+  --input-data data/spanish-news-seamless-one.json \
+  --measurement-mode=count_windows \
+  --measurement-request-count=5000 \
+  --request-rate-range=40.0:200.0:5 \
+  --latency-threshold=5000 \
+  --percentile=50 \
+  --max-threads=400 \
+  --binary-search \
+  -v \
+  --stability-percentage=20
+```
+
+
+Each trial runs through the data 50 times (50 * 19). Struggling to get some
+stablity. I'm expecting this to produce about 45 requests per second that
+can be sustained based upon seeing about 47 infer/sec.  Hopefully this finds
+that to be true. It seems like I get different answers depending on the max_threads,
+but that seems just wrong. Clearly not understanding the interactino of max_threads
+on requests/min.
+```
+sdk:/workspace# perf_analyzer \
+  -m seamless-m4t-v2-large \
+  --input-data data/spanish-news-seamless-one.json \
+  --measurement-mode=count_windows \
+  --measurement-request-count=950 \
+  --request-rate-range=2:58:5 \
+  --latency-threshold=5000 \
+  --percentile=50 \
+  --max-threads=60 \
+  --binary-search \
+  --stability-percentage=20 \
+  -v
+```
+
+Each trial runs for 3.33 minutes. Struggling to get some 
+```
+sdk:/workspace# perf_analyzer \
+  -m seamless-m4t-v2-large \
+  --input-data data/spanish-news-seamless-one.json \
+  --measurement-interval=200000 \
+  --request-rate-range=2:58:5 \
+  --latency-threshold=5000 \
+  --percentile=50 \
+  --max-threads=60 \
+  --binary-search \
+  --stability-percentage=20 \
+  -v
+```
