@@ -200,77 +200,50 @@ implementing batch processing. Here are the key differences:
 These changes allow for more efficient processing of multiple requests by leveraging batch operations, which can significantly improve performance, especially for larger numbers of requests.
 
 ## Performance Analyzer - Part 2
-```
-sdk:/workspace# perf_analyzer \
-  -m seamless-m4t-v2-large \
-  --input-data data/spanish-news-seamless-one.json \
-  --measurement-interval=200000 \
-  --request-rate-range=40.0:200.0:5.0 \
-  --latency-threshold=5000 \
-  --max-threads=400 \
-  --percentile=50 \
-  --binary-search \
-  -v
-```
-sdk:/workspace# perf_analyzer \
-  -m seamless-m4t-v2-large \
-  --input-data data/spanish-news-seamless-one.json \
-  --measurement-interval=200000 \
-  --concurrency-range=40:300:5 \
-  --latency-threshold=5000 \
-  --percentile=50 \
-  --binary-search \
-  -v
-
+Let's retry our performance analyzer run. For this run we increase the starting point
+for the requests/sec to 30 and set the upper end to 58. Since we are starting at 30, we
+also increase the number of requests used in each trial run to 6004. This correspondes
+to the low end requests/sec taking about 3.3 minutes per trial. We also increase the
+max-threads in order to be able to push enough requests/sec that we are asking for.
+Here's the full command line argument:
 
 ```
 sdk:/workspace# perf_analyzer \
   -m seamless-m4t-v2-large \
   --input-data data/spanish-news-seamless-one.json \
   --measurement-mode=count_windows \
-  --measurement-request-count=5000 \
-  --request-rate-range=40.0:200.0:5 \
+  --measurement-request-count=6004 \
+  --request-rate-range=30:58:5 \
   --latency-threshold=5000 \
   --percentile=50 \
-  --max-threads=400 \
-  --binary-search \
-  -v \
-  --stability-percentage=20
-```
-
-
-Each trial runs through the data 50 times (50 * 19). Struggling to get some
-stablity. I'm expecting this to produce about 45 requests per second that
-can be sustained based upon seeing about 47 infer/sec.  Hopefully this finds
-that to be true. It seems like I get different answers depending on the max_threads,
-but that seems just wrong. Clearly not understanding the interactino of max_threads
-on requests/min.
-```
-sdk:/workspace# perf_analyzer \
-  -m seamless-m4t-v2-large \
-  --input-data data/spanish-news-seamless-one.json \
-  --measurement-mode=count_windows \
-  --measurement-request-count=950 \
-  --request-rate-range=4:92:5 \
-  --latency-threshold=5000 \
-  --percentile=50 \
-  --max-threads=60 \
+  --max-threads=300 \
   --binary-search \
   --stability-percentage=20 \
   -v
 ```
 
-Each trial runs for 3.33 minutes. Struggling to get some 
-```
-sdk:/workspace# perf_analyzer \
-  -m seamless-m4t-v2-large \
-  --input-data data/spanish-news-seamless-one.json \
-  --measurement-interval=200000 \
-  --request-rate-range=2:58:5 \
-  --latency-threshold=5000 \
-  --percentile=50 \
-  --max-threads=60 \
-  --binary-search \
-  --stability-percentage=20 \
-  -v
-```
+SUCCESS! We find that we can support 44 requests/sec keeping the median latency for a
+single request under 5 seconds.  Here's is the detailed information for that test.
+
+Request Rate: 44 inference requests per seconds
+  * Pass [1] throughput: 43.5389 infer/sec. p50 latency: 1511563 usec
+  * Pass [2] throughput: 43.8404 infer/sec. p50 latency: 1437355 usec
+  * Pass [3] throughput: 44.2131 infer/sec. p50 latency: 1439022 usec
+  * Client: 
+    * Request count: 18074
+    * Throughput: 43.8625 infer/sec
+    * Avg client overhead: 0.00%
+    * p50 latency: 1461702 usec
+    * p90 latency: 3754267 usec
+    * p95 latency: 4346325 usec
+    * p99 latency: 5245158 usec
+    * Avg HTTP time: 1773992 usec (send 66 usec + response wait 1773926 usec + receive 0 usec)
+  * Server: 
+    * Inference count: 18074
+    * Execution count: 570
+    * Successful request count: 18074
+    * Avg request latency: 1773496 usec (overhead 27 usec + queue 905925 usec + compute input 257 usec + compute infer 867042 usec + compute output 243 usec)
+
+In fact, we see that the average latency for a single request is just 1.77 seconds
+where it spends 0.9 seconds in the queue and 0.867 seconds running on the GPU. The
+average batch size was 31.7 (18074 / 570).
