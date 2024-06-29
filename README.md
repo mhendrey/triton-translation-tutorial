@@ -107,6 +107,15 @@ $ cd ../seamless-m4t-v2-large
 $ conda env create -f environment.yml
 $ conda-pack -n seamless-m4t-v2-large
 ```
+## Download Models
+The two models that we will use are available in Huggingface. We want to download these
+now so they are stored in your local Huggingface Hub cache, which will then be volume
+mounted into the Triton Inference Server (see docker-compose.yaml). I'm sure there is
+a better way, but I just open up a Python interpretter and pull the models following
+the directions on their model pages. Huggingface gives some other ways to do [this](https://huggingface.co/docs/hub/en/models-downloading).
+
+* [SeamlessM4Tv2Large](https://huggingface.co/facebook/seamless-m4t-v2-large)
+* [FastText-Language-Identification](https://huggingface.co/facebook/fasttext-language-identification)
 
 ## Next
 In the first tutorial, we will create a basic translation service by defining

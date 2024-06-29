@@ -251,7 +251,7 @@ sdk:/workspace# perf_analyzer \
   --input-data data/spanish-news-seamless-one.json \
   --measurement-mode=count_windows \
   --measurement-request-count=950 \
-  --request-rate-range=2:58:5 \
+  --request-rate-range=4:92:5 \
   --latency-threshold=5000 \
   --percentile=50 \
   --max-threads=60 \
