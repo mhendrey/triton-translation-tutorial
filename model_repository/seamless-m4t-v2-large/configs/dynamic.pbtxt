@@ -33,6 +33,6 @@ parameters: {
   value: {string_value: "$$TRITON_MODEL_DIRECTORY/seamless-m4t-v2-large.tar.gz"}
 }
 
-instance_group [{ kind: KIND_GPU }]
+instance_group [{ kind: KIND_AUTO }]
 dynamic_batching: {}
 version_policy: { latest: { num_versions: 1}}

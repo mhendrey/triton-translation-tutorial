@@ -157,7 +157,11 @@ output [
 ```
 
 Lastly, we specify the conda pack to use and for this deployment we want it to run on
-GPU.
+GPU. To explicitly require it run on a GPU we would set `kind: KIND_GPU`, but it we
+will use `kind: KIND_AUTO` which will run on a GPU if available, otherwise fall back
+to running on a CPU. This is nice if you are developing on a non-gpu, but want to
+deploy on a GPU. Just remember to also do a similar check in the actual code itself
+when we load the model from disk.
 
 ```
 parameters: {
@@ -165,7 +169,7 @@ parameters: {
   value: {string_value: "$$TRITON_MODEL_DIRECTORY/seamless-m4t-v2-large.tar.gz"}
 }
 
-instance_group [{ kind: KIND_GPU }]
+instance_group [{ kind: KIND_AUTO }]
 ```
 
 ## Python Backend
@@ -418,7 +422,7 @@ sdk:/workspace# perf_analyzer \
   --latency-threshold=5000 \
   --max-threads=16 \
   --binary-search \
-  --v \
+  -v \
   --stability-percentage=25
 ```
 
@@ -432,7 +436,7 @@ As you can see perf_analyzer takes many [arguments](https://docs.nvidia.com/deep
 * --latency-threshold : Maximum time in ms a request should take
 * --max-threads : Number of threads to use to send the requests
 * --binary-search : Perform search between request-rate-range specified
-* --v : verbose mode gives more info
+* -v : verbose mode gives more info
 * --stability-percentage : Max. % diff between high & low latency for last 3 trials
 
 This will use a binary search to find what request rate the translate deployment can
