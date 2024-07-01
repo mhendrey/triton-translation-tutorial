@@ -117,6 +117,18 @@ the directions on their model pages. Huggingface gives some other ways to do [th
 * [SeamlessM4Tv2Large](https://huggingface.co/facebook/seamless-m4t-v2-large)
 * [FastText-Language-Identification](https://huggingface.co/facebook/fasttext-language-identification)
 
+
+Navigate to your local Huggingface hub cache where you will download the models using your 
+Huggingface account username and access token, per the following [download instructions](https://huggingface.co/docs/hub/en/models-downloading) 
+and [access token requrirements](https://huggingface.co/blog/password-git-deprecation). While you're
+at it go into the docker compose yaml file and change my local path to your local path: /home/[USER_DIR]/.cache/huggingface/hub.
+
+```
+$ cd ~/home/[USER_DIR]/.cache/huggingface/hub
+$ git clone https://[USER_NAME]:[ACCESS_TOKEN]@hf.co/facebook/seamless-m4t-v2-large
+$ git clone https://[USER_NAME]:[ACCESS_TOKEN]@hf.co/facebook/fasttext-language-identification
+```
+
 ## Next
 In the first tutorial, we will create a basic translation service by defining
 the config.pbtxt & model.py files for both models. We will hold off adding the
