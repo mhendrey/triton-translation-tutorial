@@ -7,7 +7,7 @@ services:
     shm_size: "1gb"
     volumes:
       - ./model_repository:/models
-      - /home/matthew/.cache/huggingface/hub:/hub
+      - /home/$USER/.cache/huggingface/hub:/hub
     ports:
       - 8000:8000
       - 8001:8001

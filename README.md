@@ -120,8 +120,9 @@ the directions on their model pages. Huggingface gives some other ways to do [th
 
 Navigate to your local Huggingface hub cache where you will download the models using your 
 Huggingface account username and access token, per the following [download instructions](https://huggingface.co/docs/hub/en/models-downloading) 
-and [access token requrirements](https://huggingface.co/blog/password-git-deprecation). While you're
-at it go into the docker compose yaml file and change my local path to your local path: /home/[USER_DIR]/.cache/huggingface/hub.
+and [access token requrirements](https://huggingface.co/blog/password-git-deprecation).
+If your local path is different from /home/$USER/.cache/huggingface/hub, then go into
+the docker compose yaml file and change the volume mount to your local path.
 
 ```
 $ cd ~/home/[USER_DIR]/.cache/huggingface/hub
