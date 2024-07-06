@@ -1,6 +1,6 @@
 name: "translate"
 backend: "python"
-max_batch_size: 0
+max_batch_size: 10
 default_model_filename: "translate.py"
 
 input [
@@ -19,3 +19,4 @@ output [
 ]
 
 instance_group [{ kind: KIND_CPU }]
+dynamic_batching: {}

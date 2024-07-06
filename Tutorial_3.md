@@ -40,17 +40,18 @@ Python file that contains the necessary code.
 
 ## config.pbtxt
 Here is the entire contents of the file. We give our deployment a nice easy name for our
-requestors to know. The BLS is supported by the Python backend. We will start off with
-dynamic batching disabled, just like before. Our next tutorial will be a version that has
-dynamic batching enabled. The input is expecting an array with a single string which is
-the contents of the document to be translated. The output will the same, but now with
-the translated text. Because this deployment will submit requests to the
-seamless-m4t-v2-large deployment, it won't need to run on a GPU.
+requestors to know. The BLS is supported by the Python backend. Since we know that we
+will eventually enable dynamic batching, let's just start off with the config set up for
+it, but we won't properly handle the batch in the `.py` file until the next tutorial.
+The input is expecting an array with a single string which is the contents of the
+document to be translated. The output will the same, but now with the translated text.
+Because this deployment will submit requests to the seamless-m4t-v2-large deployment,
+it won't need to run on a GPU.
 
 ```
 name: "translate"
 backend: "python"
-max_batch_size: 0
+max_batch_size: 10
 default_model_filename: "translate.py"
 
 input [
@@ -69,6 +70,7 @@ output [
 ]
 
 instance_group [{ kind: KIND_CPU }]
+dynamic_batching: {}
 ```
 ## Python Backend
 Again, the key function to implement is the `execute(requests)` class method in the
@@ -171,3 +173,57 @@ Request Rate: 0.96875 inference requests per seconds
         * Avg request latency: 967561 usec (overhead 18 usec + queue 213549 usec +
           compute input 164 usec + compute infer 753653 usec + compute output 175 usec)
 
+
+Notice that the seamless-m4t-v2-large is doing 17,557 inferences across 1,597 executions.
+This means that the average batch size is 11 document chunks.  However, we know that the
+average document has 22 chunks (17,557 / 798).  This means that each document is processing
+two batches. Let's see what happens if we alter the dynamic.pbtxt file to have the
+dynamic batching wait for 12.5 microseconds to accumulate the batch.
+
+Edit the `model_repository/seamless-m4t-v2-large/configs/dynamic.pbtxt` by adding the
+`max_queue_delay_microseconds` option to `dynamic_batching` so that it now looks like:
+
+```
+dynamic_batching: {
+  max_queue_delay_microseconds: 12500
+}
+```
+Restart the Triton Inference Server so that the new config changes are loaded and then
+when we rerun the Performance Analyzer.
+
+With this small delay we find that we can increase the inference requests per second
+from 0.96875 -> 1.15625 which is nearly 20% improvement. The average batch size also
+increased from 11 (17,557 / 1,597) to 19.49 (17,600 / 903)
+
+* Request Rate: 1.15625 inference requests per seconds
+  * Pass [1] throughput: 1.15072 infer/sec. Avg latency: 1021668 usec (std 138324 usec). 
+  * Pass [2] throughput: 1.15638 infer/sec. Avg latency: 1011511 usec (std 139384 usec). 
+  * Pass [3] throughput: 1.15569 infer/sec. Avg latency: 1019880 usec (std 141077 usec). 
+  * Client: 
+    * Request count: 800
+    * Throughput: 1.15426 infer/sec
+    * Avg client overhead: 0.00%
+    * Avg latency: 1017694 usec (standard deviation 139495 usec)
+    * p50 latency: 1016356 usec
+    * p90 latency: 1219652 usec
+    * p95 latency: 1229695 usec
+    * p99 latency: 1258810 usec
+    * Avg HTTP time: 1017681 usec (send 196 usec + response wait 1017485 usec + receive 0 usec)
+  * Server: 
+    * Inference count: 800
+    * Execution count: 800
+    * Successful request count: 800
+    * Avg request latency: 1017077 usec (overhead 198855 usec + queue 53994 usec + compute 764228 usec)
+
+  * Composing models: 
+  * fasttext-language-identification, version: 2
+      * Inference count: 17622
+      * Execution count: 17622
+      * Successful request count: 17622
+      * Avg request latency: 195 usec (overhead 2 usec + queue 16 usec + compute input 7 usec + compute infer 165 usec + compute output 5 usec)
+
+  * seamless-m4t-v2-large, version: 3
+      * Inference count: 17600
+      * Execution count: 903
+      * Successful request count: 17600
+      * Avg request latency: 818049 usec (overhead 20 usec + queue 53978 usec + compute input 138 usec + compute infer 763733 usec + compute output 179 usec)

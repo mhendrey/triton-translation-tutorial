@@ -160,7 +160,7 @@ class TritonPythonModel:
         chunks : pb_utils.Tensor
             Resultant array of input document split into sentences
         """
-        doc_text = doc_text_tt.as_numpy()[0].decode(char_encoding)
+        doc_text = doc_text_tt.as_numpy().reshape(-1)[0].decode(char_encoding)
         for chunk in doc_text.split("."):
             if chunk:
                 chunk = f"{chunk}."  # put . back on

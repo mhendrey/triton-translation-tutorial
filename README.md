@@ -70,7 +70,7 @@ command to pull the needed containers.
 
 ```
 $ docker pull nvcr.io/nvidia/tritonserver:24.05-pyt-python-py3
-$ docker pull nvcr.io/nvidia/tritonserver:24.05-py-sdk
+$ docker pull nvcr.io/nvidia/tritonserver:24.05-py3-sdk
 ```
 ### Creating Conda Environments
 To enable each model to have the necessary libraries it needs, Triton Inference
