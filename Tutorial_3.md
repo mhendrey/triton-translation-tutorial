@@ -84,7 +84,7 @@ the major steps we will take:
 3. If the source language isn't provided, submit a request to the FastText model to
    identify the language.
 4. The input text is split into chunks using `chunk_document()`.
-5. Each chunk is sent to a SeamlessM4Tv2Large model for translation using asynchronous
+5. Each chunk is sent to the SeamlessM4Tv2Large model for translation using asynchronous
    requests.
 6. The translated chunks are collected and combined into a single document using
     `combine_translated_chunks()`.
@@ -113,8 +113,101 @@ Here we see that requestors can provide either the source language of their docu
 the `src_lang` each chunk will be submitted to FastText for identification. If they
 don't provde a `tgt_lang` it defaults to English.
 
-MORE TEXT NEEDS TO GO HERE
+The BLS can submit inference requests to other Triton deployment endpoints. Here is
+an example where we send data to the FastText model for language identification:
 
+```
+infer_lang_id_request = pb_utils.InferenceRequest(
+    model_name="fasttext-language-identification",
+    requested_output_names=["SRC_LANG"],
+    inputs=[chunk_tt],
+)
+# Perform synchronous blocking inference request
+infer_lang_id_response = infer_lang_id_request.exec()
+```
+
+Again, we leverage existing functionality that is part of the `pb_utils` library by
+creating an `InferenceRequest`. We need to specify the `model_name` which is nothing
+more than the model endpoint (same as the directory name for the model of interest).
+We also specify a list of the outputs that we want with `requested_output_names`.
+Notice, that the fasttext-language-identification model returns two outputs,
+`SRC_LANG` and `SRC_SCRIPT` [see it's dynamic.pbtxt file], but we only care about the
+first.  Of course, we also need to provide the necessary `inputs` which must be
+Triton `Tensor` objects. Here we provide the `chunk_tt` which is yielded by the
+`chunk_document()`. Be sure that you get the correct shape which for this example
+is [1, 1]. Remembering that that first dimension specifies the batch size.
+
+The second line waits for the request to be executed and the result returned in a
+`pb_utils.InferenceResponse` object. Because the FastText is so fast, we do this
+synchronously meaning that we wait for the response to come back before we continue.
+
+To get the output of the FastText request, we use `pb_utils.get_output_tensor_by_name()`
+which takes as input the `InferenceResponse` and the name of the output we want.
+
+```
+src_lang_tt = pb_utils.get_output_tensor_by_name(
+    infer_lang_id_response, "SRC_LANG"
+)
+```
+
+As you are hopefully learning, this returns a `pb_utils.Tensor`. Normally, we would
+cast this to a more familiar numpy array, but not this time. Instead, we can use this
+directly when we submit our request to the SeamlessM4Tv2Large deployment:
+
+```
+infer_seamless_request = pb_utils.InferenceRequest(
+    model_name="seamless-m4t-v2-large",
+    requested_output_names=["TRANSLATED_TEXT"],
+    inputs=[chunk_tt, src_lang_tt, tgt_lang_tt],
+)
+inference_response_awaits.append(infer_seamless_request.async_exec())
+```
+This looks just like the FastText `InferenceReqeust`, but of course the variables have
+changed to match the correct inputs and outputs available to specified in the pbtxt
+file. Only this time, we call `async_exec()` on the `InferenceRequest` in order to
+perform asynchronous calls to the SeamlessM4Tv2Large deployment. For now we simply
+collect the async tasts into an array and continue the loop.
+
+After we have submitted all the chunks of the document, we `await` for them all to
+finish and then loop through the resulting responses. Here we will convert the returned
+`pb_utils.Tensor` into a numpy array from which we can then get to the Python string that
+we want to gather up.
+
+```
+inference_responses = await asyncio.gather(*inference_response_awaits)
+for infer_seamless_response in inference_responses:
+    if infer_seamless_response.has_error():
+        translated_chunks.append(infer_seamless_response.error().message())
+    else:
+        translated_chunk_np = (
+            pb_utils.get_output_tensor_by_name(
+                infer_seamless_response, "TRANSLATED_TEXT"
+            )
+            .as_numpy()
+            .reshape(-1)
+        )
+        translated_chunk = translated_chunk_np[0].decode("utf-8")
+        translated_chunks.append(translated_chunk)
+
+```
+
+The resulting translated text, an array of strings, will then be joined together to
+create the complete, translated text which is wrapped into a `pb_utils.Tensor`. That
+`Tensor` is turned into `pb_utils.InferenceResponse` which will then get returned to
+the client that requested the document be translated.
+
+```
+translated_doc = " ".join(translated_chunks)
+translated_doc_tt = pb_utils.Tensor(
+    "TRANSLATED_TEXT",
+    np.array([translated_doc], dtype=self.translated_text_dtype),
+)
+# Create the response
+inference_response = pb_utils.InferenceResponse(
+    output_tensors=[translated_doc_tt]
+)
+responses.append(inference_response)
+```
 
 ## Performance Analyzer
 Just like before, we can leverage the built in perf_analyzer available in the Triton
