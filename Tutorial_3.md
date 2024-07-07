@@ -320,3 +320,10 @@ increased from 11 (17,557 / 1,597) to 19.49 (17,600 / 903)
       * Execution count: 903
       * Successful request count: 17600
       * Avg request latency: 818049 usec (overhead 20 usec + queue 53978 usec + compute input 138 usec + compute infer 763733 usec + compute output 179 usec)
+
+## Next Steps
+In this tutorial, though we have enabled dynamic batching for the translate Triton
+deployment, the Python code is only looping through each request and translating them
+one request at a time. In the next tutorial, we will make a new version of the
+deployment that will asynchronously submit each chunk for **all** documents in the
+batch to see if we can get a better performance than 1.15 documents / second.
