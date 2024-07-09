@@ -1,5 +1,7 @@
 import asyncio
+from collections import defaultdict
 import json
+import inspect
 import numpy as np
 from typing import List
 
@@ -48,12 +50,17 @@ class TritonPythonModel:
         List[pb_utils.InferenceResponse]
             Each response is the translated document for a given client's request
         """
-
+        logger = pb_utils.Logger
         n_requests = len(requests)
+        logger.log_warn(f"`translate` received {n_requests} requests in dynamic batch")
         responses = [None] * n_requests
+        is_ok = [True] * n_requests
+        inference_response_awaits = []
+        batch_chunk_ids = []
+        results = defaultdict(dict)
         # Every Python backend must iterate over everyone of the requests
         # and create a pb_utils.InferenceResponse for each of them.
-        for request_id, request in enumerate(requests):
+        for batch_id, request in enumerate(requests):
             # Get INPUT_TEXT
             try:
                 input_text_tt = pb_utils.get_input_tensor_by_name(request, "INPUT_TEXT")
@@ -63,7 +70,8 @@ class TritonPythonModel:
                         f"{exc}", pb_utils.TritonError.INVALID_ARG
                     )
                 )
-                responses[request_id] = response
+                responses[batch_id] = response
+                is_ok[batch_id] = False
                 continue
 
             # Get any optional parameters passed in.
@@ -81,10 +89,7 @@ class TritonPythonModel:
                 )
 
             # Chunk up the input_text_tt into pieces for translation
-            inference_response_awaits = []
-            translated_chunks = []
-            had_error = False
-            for chunk_tt in self.chunk_document(input_text_tt):
+            for chunk_id, chunk_tt in enumerate(self.chunk_document(input_text_tt)):
                 if src_lang is None:
                     infer_lang_id_request = pb_utils.InferenceRequest(
                         model_name="fasttext-language-identification",
@@ -94,13 +99,15 @@ class TritonPythonModel:
                     # Perform synchronous blocking inference request
                     infer_lang_id_response = infer_lang_id_request.exec()
                     if infer_lang_id_response.has_error():
-                        had_error = True
-                        response = pb_utils.InferenceResponse(
-                            error=pb_utils.TritonError(
-                                f"{infer_lang_id_response.error().message()}"
-                            )
+                        err_msg = (
+                            f"{chunk_id=:} had error: "
+                            + f"{infer_lang_id_response.error().message()}"
                         )
-                        responses.append(response)  ###NEED TO HANDLE THIS BETTER
+                        response = pb_utils.InferenceResponse(
+                            error=pb_utils.TritonError(err_msg)
+                        )
+                        responses[batch_id] = response
+                        is_ok[batch_id] = False
                         break
                     src_lang_tt = pb_utils.get_output_tensor_by_name(
                         infer_lang_id_response, "SRC_LANG"
@@ -112,35 +119,49 @@ class TritonPythonModel:
                 )
                 # Perform asynchronous inference request
                 inference_response_awaits.append(infer_seamless_request.async_exec())
+                batch_chunk_ids.append((batch_id, chunk_id))
 
-            if had_error:
-                return responses
-
-            inference_responses = await asyncio.gather(*inference_response_awaits)
-            for infer_seamless_response in inference_responses:
-                if infer_seamless_response.has_error():
-                    translated_chunks.append(infer_seamless_response.error().message())
-                else:
-                    translated_chunk_np = (
-                        pb_utils.get_output_tensor_by_name(
-                            infer_seamless_response, "TRANSLATED_TEXT"
-                        )
-                        .as_numpy()
-                        .reshape(-1)
+        # After submitting all the chunks for all the requests, wait for results
+        inference_responses = await asyncio.gather(*inference_response_awaits)
+        for infer_seamless_response, (batch_id, chunk_id) in zip(
+            inference_responses, batch_chunk_ids
+        ):
+            # logger.log_warn(f"`translate`: Starting on {batch_id=:}, {chunk_id=:}")
+            if infer_seamless_response.has_error() and responses[batch_id] is None:
+                err_msg = (
+                    f"{chunk_id=:} had error: "
+                    + f"{infer_seamless_response.error().message()}"
+                )
+                response = pb_utils.InferenceResponse(
+                    error=pb_utils.TritonError(err_msg)
+                )
+                responses[batch_id] = response
+                is_ok[batch_id] = False
+            else:
+                translated_chunk_np = (
+                    pb_utils.get_output_tensor_by_name(
+                        infer_seamless_response, "TRANSLATED_TEXT"
                     )
-                    translated_chunk = translated_chunk_np[0].decode("utf-8")
-                    translated_chunks.append(translated_chunk)
+                    .as_numpy()
+                    .reshape(-1)
+                )
+                translated_chunk = translated_chunk_np[0].decode("utf-8")
+                results[batch_id][chunk_id] = translated_chunk
 
-            translated_doc = " ".join(translated_chunks)
-            translated_doc_tt = pb_utils.Tensor(
-                "TRANSLATED_TEXT",
-                np.array([translated_doc], dtype=self.translated_text_dtype),
-            )
-            # Create the response
-            inference_response = pb_utils.InferenceResponse(
-                output_tensors=[translated_doc_tt]
-            )
-            responses.append(inference_response)
+        for batch_id in sorted(results):
+            if is_ok[batch_id]:
+                result = results[batch_id]
+                translated_chunks = [result[chunk_id] for chunk_id in sorted(result)]
+                translated_doc = " ".join(translated_chunks)
+                translated_doc_tt = pb_utils.Tensor(
+                    "TRANSLATED_TEXT",
+                    np.array([translated_doc], dtype=self.translated_text_dtype),
+                )
+                # Create the response
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=[translated_doc_tt]
+                )
+                responses[batch_id] = inference_response
 
         return responses
 
