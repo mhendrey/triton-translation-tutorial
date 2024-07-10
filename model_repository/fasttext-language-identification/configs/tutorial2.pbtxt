@@ -1,6 +1,6 @@
 name: "fasttext-language-identification"
 backend: "python"
-max_batch_size: 0
+max_batch_size: 50
 default_model_filename: "fasttext-language-identification.py"
 
 input [
@@ -28,4 +28,5 @@ parameters: {
   value: {string_value: "$$TRITON_MODEL_DIRECTORY/fasttext-language-identification.tar.gz"}
 }
 instance_group [{kind: KIND_CPU}]
-version_policy: { specific: { versions: [1]}}
+dynamic_batching: {}
+version_policy: { specific: { versions: [2]}}

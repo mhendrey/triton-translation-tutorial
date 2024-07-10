@@ -96,7 +96,8 @@ output [
 ```
 
 Lastly we add in some optional fields in the config.pbtxt that specify the conda
-environment and that we want to run this model using the CPU.
+environment and that we want to run this model using the CPU. In addition, we specify
+a specific version of the model to be run, the first version.
 
 ```
 parameters: {
@@ -104,6 +105,7 @@ parameters: {
   value: {string_value: "$$TRITON_MODEL_DIRECTORY/fasttext-language-identification.tar.gz"}
 }
 instance_group [{kind: KIND_CPU}]
+version_policy: { specific: { versions: [1]}}
 ```
 
 ### SeamlessM4Tv2Large
@@ -170,6 +172,7 @@ parameters: {
 }
 
 instance_group [{ kind: KIND_AUTO }]
+version_policy: { specific: { versions: [1]}}
 ```
 
 ## Python Backend
@@ -364,7 +367,7 @@ a request and contains either the translated text or an error message.
 We launch the service from the parent directory using docker compose
 
 ```
-$ docker-compose up
+$ docker-compose -f docker-compose-tutorial1.yaml up
 ```
 
 This mounts two volumes into the Triton Inference Server container. The first is the

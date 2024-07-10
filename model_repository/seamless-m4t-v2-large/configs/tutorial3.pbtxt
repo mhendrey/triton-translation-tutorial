@@ -1,6 +1,6 @@
 name: "seamless-m4t-v2-large"
 backend: "python"
-max_batch_size: 0
+max_batch_size: 50
 default_model_filename: "seamless-m4t-v2-large.py"
 
 input [
@@ -34,4 +34,5 @@ parameters: {
 }
 
 instance_group [{ kind: KIND_AUTO }]
-version_policy: { specific: { versions: [1]}}
+dynamic_batching: { }
+version_policy: { specific: { versions: [3]}}

@@ -19,7 +19,5 @@ output [
 ]
 
 instance_group [{ kind: KIND_CPU }]
-dynamic_batching: {
-  max_queue_delay_microseconds: 600000
-}
-version_policy: { latest: { num_versions: 1}}
+dynamic_batching: { }
+version_policy: { specific: { versions: [1]}}
