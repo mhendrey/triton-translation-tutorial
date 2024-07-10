@@ -55,10 +55,17 @@ to reshape them. In pseudocode it will be something like:
 ```
 
 ## Relaunching Triton Inference Server
-To launch the server we make a minor change to the `docker-compose.yml` file by
-passing in the `--model-config-name=dynamic` option when starting tritonserver. This
-will force Triton Server to look in the `configs` folder for our `dynamic.pbtxt` files.
-Make that change and then call `docker-compose up` to restart things.
+To launch the server, we make a minor change to the `docker-compose-tutorial1.yaml`
+file by passing in the `--model-config-name=tutorial2` option when starting
+tritonserver and saving it as `docker-compose-tutorial2.yaml`. This will force Triton
+Server to look in the `configs` folder for our `tutorial2.pbtxt` files. If a model
+doesn't have that file, it falls back to the default `config.pbtxt`. See
+[here](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html#custom-model-configuration)
+for more info. Make that change and then start up the service with:
+
+```
+$ docker-compose -f docker-compose-tutorial2.yaml up
+```
 
 ## Performance Analyzer
 Well that certainly seems really simple. Let's see how much that helps our throughput
@@ -198,6 +205,21 @@ implementing batch processing. Here are the key differences:
    - Both methods return a list of responses, but `execute_v3` ensures that the order of responses matches the order of incoming requests, including None or error responses for invalid requests.
 
 These changes allow for more efficient processing of multiple requests by leveraging batch operations, which can significantly improve performance, especially for larger numbers of requests.
+
+With these changes made and saved as version `3`, we need to edit the
+`seamless-m4t-v2-large/configs/tutorial2.pbtxt` so that when we restart we use this
+new version of the model.
+
+```
+- version_policy: { specific: { versions: [2]}}
++ version_policy: { specific: { versions: [3]}}
+```
+
+Restart the service with the same command as before
+
+```
+$ docker-compose -f docker-compose-tutorial2.yaml up
+```
 
 ## Performance Analyzer - Part 2
 Let's retry our performance analyzer run. For this run we increase the starting point

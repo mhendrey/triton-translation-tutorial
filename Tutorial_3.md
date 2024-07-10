@@ -38,7 +38,7 @@ The BLS is supported by the Python backend. So just like in our previous Triton
 deployments from the earlier tutorials, we need to specify both a config.pbtxt and a
 Python file that contains the necessary code.
 
-## config.pbtxt
+## configs/tutorial3.pbtxt
 Here is the entire contents of the file. We give our deployment a nice easy name for our
 requestors to know. The BLS is supported by the Python backend. Since we know that we
 will eventually enable dynamic batching, let's just start off with the config set up for
@@ -46,7 +46,8 @@ it, but we won't properly handle the batch in the `.py` file until the next tuto
 The input is expecting an array with a single string which is the contents of the
 document to be translated. The output will the same, but now with the translated text.
 Because this deployment will submit requests to the seamless-m4t-v2-large deployment,
-it won't need to run on a GPU.
+it won't need to run on a GPU. Lastly, we are specifically telling Triton Inference
+Server to run version `1` of the model.
 
 ```
 name: "translate"
@@ -71,6 +72,7 @@ output [
 
 instance_group [{ kind: KIND_CPU }]
 dynamic_batching: {}
+version_policy: { specific: { versions: [1]}}
 ```
 ## Python Backend
 Again, the key function to implement is the `execute(requests)` class method in the
@@ -131,15 +133,16 @@ creating an `InferenceRequest`. We need to specify the `model_name` which is not
 more than the model endpoint (same as the directory name for the model of interest).
 We also specify a list of the outputs that we want with `requested_output_names`.
 Notice, that the fasttext-language-identification model returns two outputs,
-`SRC_LANG` and `SRC_SCRIPT` [see it's dynamic.pbtxt file], but we only care about the
+`SRC_LANG` and `SRC_SCRIPT` [see it's config.pbtxt file], but we only care about the
 first.  Of course, we also need to provide the necessary `inputs` which must be
 Triton `Tensor` objects. Here we provide the `chunk_tt` which is yielded by the
 `chunk_document()`. Be sure that you get the correct shape which for this example
 is [1, 1]. Remembering that that first dimension specifies the batch size.
 
-The second line waits for the request to be executed and the result returned in a
-`pb_utils.InferenceResponse` object. Because the FastText is so fast, we do this
-synchronously meaning that we wait for the response to come back before we continue.
+The second line waits for the request to be executed and the result returned is a
+`pb_utils.InferenceResponse` object. Because the FastText is so fast and because we
+need this information before we can call the SeamlessM4Tv2Large, we do this synchronously
+meaning that we wait for the response to come back before we continue.
 
 To get the output of the FastText request, we use `pb_utils.get_output_tensor_by_name()`
 which takes as input the `InferenceResponse` and the name of the output we want.
@@ -209,6 +212,13 @@ inference_response = pb_utils.InferenceResponse(
 responses.append(inference_response)
 ```
 
+With all these changes made, let's restart the service, but this time using the
+docker-compose-tutorial3.yaml:
+
+```
+$ docker-compose -f docker-compose-tutorial3.yaml up
+```
+
 ## Performance Analyzer
 Just like before, we can leverage the built in perf_analyzer available in the Triton
 Inference Server SDK container. We enable the `--bls-composing-models` option which
@@ -270,10 +280,10 @@ Request Rate: 0.96875 inference requests per seconds
 Notice that the seamless-m4t-v2-large is doing 17,557 inferences across 1,597 executions.
 This means that the average batch size is 11 document chunks.  However, we know that the
 average document has 22 chunks (17,557 / 798).  This means that each document is processing
-two batches. Let's see what happens if we alter the dynamic.pbtxt file to have the
+two batches. Let's see what happens if we alter the tutorial3.pbtxt file to have the
 dynamic batching wait for 12.5 microseconds to accumulate the batch.
 
-Edit the `model_repository/seamless-m4t-v2-large/configs/dynamic.pbtxt` by adding the
+Edit the `model_repository/seamless-m4t-v2-large/configs/tutorial3.pbtxt` by adding the
 `max_queue_delay_microseconds` option to `dynamic_batching` so that it now looks like:
 
 ```
@@ -283,6 +293,10 @@ dynamic_batching: {
 ```
 Restart the Triton Inference Server so that the new config changes are loaded and then
 when we rerun the Performance Analyzer.
+
+```
+$ docker-compose -f docker-compose-tutorial3.yaml up
+```
 
 With this small delay we find that we can increase the inference requests per second
 from 0.96875 -> 1.15625 which is nearly 20% improvement. The average batch size also
