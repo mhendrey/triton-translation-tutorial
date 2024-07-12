@@ -459,7 +459,7 @@ sdk:/workspace# perf_analyzer \
   --measurement-request-count=266 \
   --request-rate-range=1.0:4.0:0.1 \
   --latency-threshold=5000 \
-  --max-threads=16 \
+  --max-threads=300 \
   --binary-search \
   -v \
   --stability-percentage=25

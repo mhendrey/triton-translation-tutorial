@@ -32,7 +32,6 @@ parameters: {
   key: "EXECUTION_ENV_PATH",
   value: {string_value: "$$TRITON_MODEL_DIRECTORY/seamless-m4t-v2-large.tar.gz"}
 }
-
 instance_group [{ kind: KIND_AUTO }]
-dynamic_batching: { }
 version_policy: { specific: { versions: [2]}}
+dynamic_batching: { }

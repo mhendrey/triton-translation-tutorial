@@ -10,14 +10,15 @@ and the code can be found in the version 2 `model_repository/{model}/2` director
 ## Configuration Changes
 To enable default dynamic batching, we make just two minor changes to the config file.
 For this tutorial, to keep things separated, we will make a new configuration file that
-can be found in the `model_repository/{model}/configs/dynamic.pbtxt`. We make the
-following changes to the `model_repository/{model}/config.pbtxt`:
+can be found in the `model_repository/{model}/configs/tutorial2.pbtxt`. We make the
+following changes compared to the `model_repository/{model}/config.pbtxt`:
 
 ```
 - max_batch_size: 0
-+ max_batch_size: 50
-+ dynamic_batching: {}
-+ version_policy: { latest: { num_versions: 1}}
++ max_batch_size: 50                              # Increase batch size for dynamic batch
+- version_policy: { specific: { versions: [1]}}
++ version_policy: { specific: { versions: [2]}}   # Change from running version 1 -> 2
++ dynamic_batching: {}                            # Enable default dynamic batching
 ```
 
 That's it! This enables default dynamic batching with a max request batch size of 50.
@@ -64,7 +65,7 @@ doesn't have that file, it falls back to the default `config.pbtxt`. See
 for more info. Make that change and then start up the service with:
 
 ```
-$ docker-compose -f docker-compose-tutorial2.yaml up
+$ CONFIG_NAME=tutorial2 docker-compose up
 ```
 
 ## Performance Analyzer
@@ -80,7 +81,7 @@ sdk:/workspace# perf_analyzer \
   --measurement-request-count=266 \
   --request-rate-range=1.0:30.0:0.5 \
   --latency-threshold=5000 \
-  --max-threads=50 \
+  --max-threads=300 \
   --binary-search \
   -v \
   --stability-percentage=25
