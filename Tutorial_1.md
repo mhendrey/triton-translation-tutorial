@@ -7,6 +7,24 @@ stand up two different deployment packages:
 * seamless-m4t-v2-large: Translate the input text from the source language to a
   specified target language
 
+The basic structure of a model repository is:
+
+```
+<model-repository-path>/
+  <model-1-name>/
+    config.pbtxt
+    1/             # Version 1
+      model.py
+    2/
+      model.py     # Version 2
+  <model-2-name>/
+    config.pbtxt
+    1/
+      model.py
+    ...
+  ...
+```
+
 We will review the contents of the config.pbtxt files and the Python code needed.
 After that we will start the Triton Inference Server and show how to send some HTTP
 requests to the running inference endpoints. Lastly, we will use the Perf Analyzer
@@ -27,6 +45,17 @@ The input and output portions each must specify a name, datatype, and shape. The
 of the input or output ***must*** match the name expected by the model in your .py
 file.
 
+In this tutorial, we will also leverage the optional `configs/` in the model
+repository for each model. This will allow us to specify alternative configurations
+that can be loaded when we launch the triton inference server container. Normally,
+this seems to be done for different architectures. For example, running on 8xH100s
+might have on configuration file and running on a single A10 might have a different
+configuration file. But for us, we will use this to be able cleanly keep the tutorials
+separated from each other as we increase the complexity of our deployment.
+
+However to start, we will use the default `config.pbtxt` file to specify the model
+configurations for this first tutorial.
+
 ### FastText Language Identification
 The model will expect just a single string be sent to it and it will return two
 strings, the language identified and the script. For Seamless, we only need the
@@ -38,7 +67,7 @@ backend fields. For this whole tutorial, we use the Python backend. We specify
 the `max_batch_size` to be zero, which turns off the dynamic batching feature of
 Triton Inference Server. We will explore that feature in the next tutorial. We also
 take advantage of an optional field, default_model_filename, to use a more descriptive
-name that contains the code needed to serve this model.
+name than just `model.py` that contains the code needed to serve this model.
 
 ```
 name: "fasttext-language-identification
@@ -57,14 +86,12 @@ numpy array. You will see this used in the .py files to come. Since we will be s
 in a string, we specify `TYPE_STRING`, but be **forewarned**. Notice that the chart
 states that this will be treated as `bytes`. This means we will need to treat the
 incoming data as `bytes` in our code. Also, notice that when we map the Triton Tensor
-to a numpy array, this will have a dtype of np.object_. 
+to a numpy array, this will have a dtype of `np.object_`. 
 
 The last thing we need to specify is the dims section. This is the number of
 dimensions of the input data. For this model, we are going to send just a 1-d array
-that has just one element in. This will be the entire contents of the document. A
-future improvement, that will be left to the student, would be to run language
-identification on the different chunks of the document to better handle documents that
-contain more than one language in them.
+that has just one element in. This will be the entire contents of the string whose
+language is to be identified.
 
 ```
 input [
@@ -159,8 +186,8 @@ output [
 ```
 
 Lastly, we specify the conda pack to use and for this deployment we want it to run on
-GPU. To explicitly require it run on a GPU we would set `kind: KIND_GPU`, but it we
-will use `kind: KIND_AUTO` which will run on a GPU if available, otherwise fall back
+GPU. To explicitly require it run on a GPU we would set `kind: KIND_GPU`, but if we
+use `kind: KIND_AUTO` then it will run on a GPU if available, otherwise fall back
 to running on a CPU. This is nice if you are developing on a non-gpu, but want to
 deploy on a GPU. Just remember to also do a similar check in the actual code itself
 when we load the model from disk.
@@ -170,7 +197,6 @@ parameters: {
   key: "EXECUTION_ENV_PATH",
   value: {string_value: "$$TRITON_MODEL_DIRECTORY/seamless-m4t-v2-large.tar.gz"}
 }
-
 instance_group [{ kind: KIND_AUTO }]
 version_policy: { specific: { versions: [1]}}
 ```
@@ -224,6 +250,9 @@ The only saving grace is that we don't need to use too many features from this
 undocumented, hidden Python package.
 
 ### FastText Language Identification
+Given this is just the first tutorial, we will be working in version 1 of this model.
+This is found in
+`model_repository/fasttext-language-identification/1/fasttext-language-identification.py`.
 As expected, the `initialize()` loads the FastText model into memory. In addition, we
 use the `pb_utils.get_output_config_by_name()` and `pb_utils.triton_string_to_numpy()`
 in conjunction to save off the corresponding numpy dtype (np.object_ in this case) for
@@ -364,10 +393,17 @@ to create the `pb_utils.InferenceResponse` object that is appended to the list o
 a request and contains either the translated text or an error message.
 
 ## Start Triton Inference Service
-We launch the service from the parent directory using docker compose
+We launch the service from the parent directory using docker compose. We will leverage
+the `--model-config-name` option when launching
+[tritonserver](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html#custom-model-configuration)
+We will do this by using an environment variable, `CONFIG_NAME`, when calling docker
+compose. The observant student will notice that there is no file named
+`configs/tutorial1.pbtxt` which is the file that tritonserver will be looking for. But
+if a pattern is not found, then tritonserver loads the default `config.pbtxt` file,
+which is what we are doing here.
 
 ```
-$ docker-compose -f docker-compose-tutorial1.yaml up
+$ CONFIG_NAME=tutorial1 docker-compose up
 ```
 
 This mounts two volumes into the Triton Inference Server container. The first is the
@@ -382,8 +418,8 @@ If we are successful you should see:
 ```
 
 ## Example Request
-Take a look a the client_requests.py in examples/ to see how to structure your
-requests. Each request has you specify the input data you are sending which includes:
+Take a look a `examples/client_requests.py` to see how to structure your requests. Each
+request has you specify the input data you are sending which includes:
 
 * name - must match what's in the config.pbtxt file
 * shape - The shape of this request.
@@ -480,4 +516,4 @@ For comparison, the fasttext-language-identification deployment can support abou
 2,100 infer/sec.
 
 In the next tutorial, we will explore leveraging Triton Inference Server's dynamic
-batching capability.
+batching capability which promises to improve that throughput.

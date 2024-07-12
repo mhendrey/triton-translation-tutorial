@@ -87,6 +87,13 @@ container:/opt/tritonserver# /usr/bin/python3 -V
 container:/opt/tritonserver# exit
 ```
 For this version of the container, you should see that it is using version 3.10.12.
+
+Also, my recommendation is to install as much through conda as possible (as opposed to
+pip). When you use conda, it will install any libraries that are also needed into your
+environment. With pip, it will sometimes just leverage a system library that already
+exists. However, if you then move that conda environment to another machine, it might
+have the wrong library (or missing altogether) and can be hard to debug.
+
 For your convenience, there are environment.yml files for both of the models.
 
 To create the fasttext-language-identification conda pack run the following code.

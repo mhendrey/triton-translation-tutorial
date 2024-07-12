@@ -3,7 +3,7 @@ version: '3.8'
 services:
   inferV1:
     image: nvcr.io/nvidia/tritonserver:24.05-pyt-python-py3
-    command: sh -c "tritonserver --model-repository=/models" # --model-config-name=dynamic"
+    command: sh -c "tritonserver --model-repository=/models --model-config-name=$CONFIG_NAME"
     shm_size: "1gb"
     volumes:
       - ./model_repository:/models
