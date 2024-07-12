@@ -81,7 +81,7 @@ sdk:/workspace# perf_analyzer \
   --measurement-request-count=266 \
   --request-rate-range=1.0:30.0:0.5 \
   --latency-threshold=5000 \
-  --max-threads=300 \
+  --max-threads=200 \
   --binary-search \
   -v \
   --stability-percentage=25
@@ -219,7 +219,7 @@ new version of the model.
 Restart the service with the same command as before
 
 ```
-$ docker-compose -f docker-compose-tutorial2.yaml up
+$ CONFIG_NAME=tutorial2 docker-compose up
 ```
 
 ## Performance Analyzer - Part 2
