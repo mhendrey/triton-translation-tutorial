@@ -28,5 +28,5 @@ parameters: {
   value: {string_value: "$$TRITON_MODEL_DIRECTORY/fasttext-language-identification.tar.gz"}
 }
 instance_group [{kind: KIND_CPU}]
-dynamic_batching: {}
 version_policy: { specific: { versions: [2]}}
+dynamic_batching: {}

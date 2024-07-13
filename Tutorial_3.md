@@ -38,7 +38,7 @@ The BLS is supported by the Python backend. So just like in our previous Triton
 deployments from the earlier tutorials, we need to specify both a config.pbtxt and a
 Python file that contains the necessary code.
 
-## configs/tutorial3.pbtxt
+## configs.pbtxt
 Here is the entire contents of the file. We give our deployment a nice easy name for our
 requestors to know. The BLS is supported by the Python backend. Since we know that we
 will eventually enable dynamic batching, let's just start off with the config set up for
@@ -71,8 +71,8 @@ output [
 ]
 
 instance_group [{ kind: KIND_CPU }]
-dynamic_batching: {}
 version_policy: { specific: { versions: [1]}}
+dynamic_batching: { }
 ```
 ## Python Backend
 Again, the key function to implement is the `execute(requests)` class method in the
@@ -95,9 +95,10 @@ the major steps we will take:
 
 This structure allows for efficient processing of large documents by breaking them into
 manageable pieces and leveraging asynchronous operations for improved performance.
-However, since we haven't done dynamic batching yet, we will only process a single
-document at a time. This will likely affect performance just as before, but at least
-a single document will be handled efficiently.
+Though we have enabled dynamic batching within the `config.pbtxt`, we won't implement
+any batching logic just yet within the code to keep things simple to start. We will
+process a single document at a time. This will likely affect performance just as
+before, but at least a single document will be handled efficiently.
 
 ### New Code Features
 The first bit of code that is different from previous tutorials demonstrates how to get
@@ -216,8 +217,17 @@ With all these changes made, let's restart the service, but this time using the
 docker-compose-tutorial3.yaml:
 
 ```
-$ docker-compose -f docker-compose-tutorial3.yaml up
+$ CONFIG_NAME=tutorial3 docker-compose up
 ```
+
+At this point, we should be running:
+
+| Model                            | Version | Status |
+| :--------------------------------|:-------:|:------:|
+| fasttext-language-identification | 2       | READY  |
+| seamless-m4t-v2-large            | 3       | READY  |
+| translate                        | 1       | READY  |
+
 
 ## Performance Analyzer
 Just like before, we can leverage the built in perf_analyzer available in the Triton
@@ -228,9 +238,9 @@ will also report out stats for the composing models too.
 sdk:/workspace# perf_analyzer \
     -m translate \
     --input-data data/spanish-news-one.json \
-    --measurement-mode=count_windows \
-    --measurement-request-count 266 \
-    --request-rate-range=0.5:2.0:0.1 \
+    --measurement-mode=time_windows \
+    --measurement-interval=200000 \
+    --request-rate-range=0.85:1.2:0.05 \
     --latency-threshold=5000 \
     --max-threads=200 \
     --binary-search \
@@ -238,50 +248,50 @@ sdk:/workspace# perf_analyzer \
     --bls-composing-models=fasttext-language-identification,seamless-m4t-v2-large
 ```
 
-After running this, we find that we can handle a maximum request rate of 0.96875
+After running this, we find that we can handle a maximum request rate of 0.89375
 requests/sec.
 
-Request Rate: 0.96875 inference requests per seconds
-  * Pass [1] throughput: 0.963679 infer/sec. Avg latency: 1017893 usec (std 16935 usec).
-  * Pass [2] throughput: 0.967187 infer/sec. Avg latency: 1016495 usec (std 15745 usec).
-  * Pass [3] throughput: 0.970712 infer/sec. Avg latency: 1016811 usec (std 16480 usec).
-  * Client:
-    * Request count: 798
-    * Throughput: 0.967184 infer/sec
+Request Rate: 0.89375 inference requests per seconds
+  * Pass [1] throughput: 0.887498 infer/sec. Avg latency: 1099948 usec (std 22327 usec). 
+  * Pass [2] throughput: 0.895828 infer/sec. Avg latency: 1098067 usec (std 20765 usec). 
+  * Pass [3] throughput: 0.891659 infer/sec. Avg latency: 1097961 usec (std 27116 usec). 
+  * Client: 
+    * Request count: 642
+    * Throughput: 0.891662 infer/sec
     * Avg client overhead: 0.00%
-    * Avg latency: 1017066 usec (standard deviation 16384 usec)
-    * p50 latency: 1011253 usec
-    * p90 latency: 1041795 usec
-    * p95 latency: 1047106 usec
-    * p99 latency: 1059062 usec
-    * Avg HTTP time: 1017053 usec (send 227 usec + response wait 1016826 usec + receive
-      0 usec)
+    * Avg latency: 1098656 usec (standard deviation 23537 usec)
+    * p50 latency: 1091817 usec
+    * p90 latency: 1128772 usec
+    * p95 latency: 1135987 usec
+    * p99 latency: 1162080 usec
+    * Avg HTTP time: 1098641 usec (send 278 usec + response wait 1098363 usec +
+      receive 0 usec)
   * Server: 
-    * Inference count: 798
-    * Execution count: 798
-    * Successful request count: 798
-    * Avg request latency: 1016388 usec (overhead 48611 usec + queue 213569 usec +
-      compute 754208 usec)
+    * Inference count: 642
+    * Execution count: 642
+    * Successful request count: 642
+    * Avg request latency: 1097902 usec (overhead 53589 usec + queue 228363 usec +
+      compute 815950 usec)
   * Composing models: 
-    * fasttext-language-identification, version: 2
-        * Inference count: 17578
-        * Execution count: 17578
-        * Successful request count: 17578
-        * Avg request latency: 236 usec (overhead 2 usec + queue 20 usec + compute
-          input 8 usec + compute infer 198 usec + compute output 6 usec)
-    * seamless-m4t-v2-large, version: 3
-        * Inference count: 17557
-        * Execution count: 1597
-        * Successful request count: 17557
-        * Avg request latency: 967561 usec (overhead 18 usec + queue 213549 usec +
-          compute input 164 usec + compute infer 753653 usec + compute output 175 usec)
+  * fasttext-language-identification, version: 2
+      * Inference count: 14146
+      * Execution count: 14146
+      * Successful request count: 14146
+      * Avg request latency: 299 usec (overhead 3 usec + queue 24 usec +
+        compute input 11 usec + compute infer 251 usec + compute output 9 usec)
+  * seamless-m4t-v2-large, version: 3
+      * Inference count: 14125
+      * Execution count: 1285
+      * Successful request count: 14125
+      * Avg request latency: 1044034 usec (overhead 17 usec + queue 228339 usec +
+        compute input 153 usec + compute infer 815371 usec + compute output 153 usec)
 
-
-Notice that the seamless-m4t-v2-large is doing 17,557 inferences across 1,597 executions.
-This means that the average batch size is 11 document chunks.  However, we know that the
-average document has 22 chunks (17,557 / 798).  This means that each document is processing
-two batches. Let's see what happens if we alter the tutorial3.pbtxt file to have the
-dynamic batching wait for 12.5 microseconds to accumulate the batch.
+Notice that the seamless-m4t-v2-large is doing 14,125 inferences across 1,285
+executions. This means that the average batch size is 11 document chunks.  However, we
+know that the average document has 22 chunks (14,125 / 642).  This means that each
+document is processing two batches. Let's see what happens if we alter the
+tutorial3.pbtxt file to have the dynamic batching wait for 12.5 microseconds to
+accumulate the batch.
 
 Edit the `model_repository/seamless-m4t-v2-large/configs/tutorial3.pbtxt` by adding the
 `max_queue_delay_microseconds` option to `dynamic_batching` so that it now looks like:
@@ -292,52 +302,54 @@ dynamic_batching: {
 }
 ```
 Restart the Triton Inference Server so that the new config changes are loaded and then
-when we rerun the Performance Analyzer.
+rerun the Performance Analyzer.
 
 ```
-$ docker-compose -f docker-compose-tutorial3.yaml up
+$ CONFIG_NAME=tutorial3 docker-compose up
 ```
 
 With this small delay we find that we can increase the inference requests per second
-from 0.96875 -> 1.15625 which is nearly 20% improvement. The average batch size also
-increased from 11 (17,557 / 1,597) to 19.49 (17,600 / 903)
+from 0.89375 -> 1.1125 which is a 24% improvement. The average batch size also
+increased from 11 (14,125 / 1,285) to 21.1 (17,589 / 832)
 
-* Request Rate: 1.15625 inference requests per seconds
-  * Pass [1] throughput: 1.15072 infer/sec. Avg latency: 1021668 usec (std 138324 usec). 
-  * Pass [2] throughput: 1.15638 infer/sec. Avg latency: 1011511 usec (std 139384 usec). 
-  * Pass [3] throughput: 1.15569 infer/sec. Avg latency: 1019880 usec (std 141077 usec). 
+* Request Rate: 1.1125 inference requests per seconds
+  * Pass [1] throughput: 1.10416 infer/sec. Avg latency: 1098300 usec (std 138938 usec). 
+  * Pass [2] throughput: 1.11249 infer/sec. Avg latency: 1088880 usec (std 133179 usec). 
+  * Pass [3] throughput: 1.1125 infer/sec. Avg latency: 1098245 usec (std 143023 usec). 
   * Client: 
-    * Request count: 800
-    * Throughput: 1.15426 infer/sec
+    * Request count: 799
+    * Throughput: 1.10972 infer/sec
     * Avg client overhead: 0.00%
-    * Avg latency: 1017694 usec (standard deviation 139495 usec)
-    * p50 latency: 1016356 usec
-    * p90 latency: 1219652 usec
-    * p95 latency: 1229695 usec
-    * p99 latency: 1258810 usec
-    * Avg HTTP time: 1017681 usec (send 196 usec + response wait 1017485 usec + receive 0 usec)
+    * Avg latency: 1095134 usec (standard deviation 138335 usec)
+    * p50 latency: 1093920 usec
+    * p90 latency: 1286280 usec
+    * p95 latency: 1314654 usec
+    * p99 latency: 1346206 usec
+    * Avg HTTP time: 1095121 usec (send 183 usec + response wait 1094938 usec +
+      receive 0 usec)
   * Server: 
-    * Inference count: 800
-    * Execution count: 800
-    * Successful request count: 800
-    * Avg request latency: 1017077 usec (overhead 198855 usec + queue 53994 usec + compute 764228 usec)
-
+    * Inference count: 799
+    * Execution count: 799
+    * Successful request count: 799
+    * Avg request latency: 1094568 usec (overhead 217749 usec + queue 19781 usec +
+      compute 857038 usec)
   * Composing models: 
   * fasttext-language-identification, version: 2
-      * Inference count: 17622
-      * Execution count: 17622
-      * Successful request count: 17622
-      * Avg request latency: 195 usec (overhead 2 usec + queue 16 usec + compute input 7 usec + compute infer 165 usec + compute output 5 usec)
-
-  * seamless-m4t-v2-large, version: 3
       * Inference count: 17600
-      * Execution count: 903
+      * Execution count: 17600
       * Successful request count: 17600
-      * Avg request latency: 818049 usec (overhead 20 usec + queue 53978 usec + compute input 138 usec + compute infer 763733 usec + compute output 179 usec)
+      * Avg request latency: 162 usec (overhead 2 usec + queue 11 usec +
+        compute input 5 usec + compute infer 139 usec + compute output 4 usec)
+  * seamless-m4t-v2-large, version: 3
+      * Inference count: 17589
+      * Execution count: 832
+      * Successful request count: 17589
+      * Avg request latency: 876677 usec (overhead 18 usec + queue 19770 usec +
+        compute input 153 usec + compute infer 856576 usec + compute output 158 usec)
 
 ## Next Steps
 In this tutorial, though we have enabled dynamic batching for the translate Triton
 deployment, the Python code is only looping through each request and translating them
 one request at a time. In the next tutorial, we will make a new version of the
 deployment that will asynchronously submit each chunk for **all** documents in the
-batch to see if we can get a better performance than 1.15 documents / second.
+batch to see if we can get a better performance than 1.1125 documents / second.
