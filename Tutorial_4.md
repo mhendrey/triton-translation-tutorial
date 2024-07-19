@@ -254,3 +254,48 @@ sdk:/workspace# perf_analyzer \
     -v \
     --bls-composing-models=fasttext-language-identification,seamless-m4t-v2-large
 ```
+
+I find that we can sustain 1.225 inferences per second. This means that we have gone
+from:
+  * 0.89375 (translate v1)
+  * 1.1125  (translate v1 with 12.5ms delay in seamless-m4t-v2-large dynamic batching)
+  * 1.225   (translate v2)
+
+Overall that is a 37% improvement over our initial attempt!
+
+* Request Rate: 1.225 inference requests per seconds
+  * Pass [1] throughput: 1.20833 infer/sec. Avg latency: 1975418 usec (std 235794 usec).
+  * Pass [2] throughput: 1.22916 infer/sec. Avg latency: 2035321 usec (std 225258 usec).
+  * Pass [3] throughput: 1.225 infer/sec. Avg latency: 2071481 usec (std 225203 usec).
+  * Client: 
+    * Request count: 879
+    * Throughput: 1.22083 infer/sec
+    * Avg client overhead: 0.00%
+    * Avg latency: 2027653 usec (standard deviation 108447 usec)
+    * p50 latency: 1769350 usec
+    * p90 latency: 2571546 usec
+    * p95 latency: 2615334 usec
+    * p99 latency: 2677987 usec
+    * Avg HTTP time: 2027641 usec (send 149 usec + response wait 2027492 usec +
+      receive 0 usec)
+  * Server: 
+    * Inference count: 879
+    * Execution count: 512
+    * Successful request count: 879
+    * Avg request latency: 2027226 usec (overhead 1184086 usec + queue 10293 usec +
+      compute 832847 usec)
+
+  * Composing models: 
+  * fasttext-language-identification, version: 2
+      * Inference count: 19382
+      * Execution count: 19382
+      * Successful request count: 19382
+      * Avg request latency: 123 usec (overhead 1 usec + queue 8 usec +
+        compute input 4 usec + compute infer 106 usec + compute output 3 usec)
+
+  * seamless-m4t-v2-large, version: 3
+      * Inference count: 19338
+      * Execution count: 880
+      * Successful request count: 19338
+      * Avg request latency: 843038 usec (overhead 20 usec + queue 10285 usec +
+        compute input 143 usec + compute infer 832417 usec + compute output 172 usec)
