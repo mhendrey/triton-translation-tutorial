@@ -125,16 +125,16 @@ the directions on their model pages. Huggingface gives some other ways to do [th
 * [FastText-Language-Identification](https://huggingface.co/facebook/fasttext-language-identification)
 
 
-Navigate to your local Huggingface hub cache where you will download the models using your 
-Huggingface account username and access token, per the following [download instructions](https://huggingface.co/docs/hub/en/models-downloading) 
-and [access token requrirements](https://huggingface.co/blog/password-git-deprecation).
-If your local path is different from /home/$USER/.cache/huggingface/hub, then go into
-the docker compose yaml file and change the volume mount to your local path.
+You can easily download models using the huggingface_hub library. Use the snapshot_download function with 
+the repository ID, such as snapshot_download("facebook/fasttext-language-identification"). 
+All downloaded files will be stored in a local cache folder for easy access.
 
 ```
-$ cd ~/home/[USER_DIR]/.cache/huggingface/hub
-$ git clone https://[USER_NAME]:[ACCESS_TOKEN]@hf.co/facebook/seamless-m4t-v2-large
-$ git clone https://[USER_NAME]:[ACCESS_TOKEN]@hf.co/facebook/fasttext-language-identification
+$ cd ~/home/[USER_DIR]/.cache/huggingface/hub  #make sure your docker-compose.yaml has the correct path
+$ python
+from huggingface_hub import snapshot_download
+
+snapshot_download("stabilityai/stable-diffusion-2-1")
 ```
 
 ## Next
