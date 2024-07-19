@@ -257,9 +257,9 @@ sdk:/workspace# perf_analyzer \
 
 I find that we can sustain 1.225 inferences per second. This means that we have gone
 from:
-  * 0.89375 (translate v1 at the beginning of Tutorial 3)
+  * 0.89375 (translate v1)
   * 1.1125  (translate v1 with 12.5ms delay in seamless-m4t-v2-large dynamic batching at the end of Tutorial 3)
-  * 1.225   (translate v2 at the end of Tutorial 4)
+  * 1.225   (translate v2)
 
 Overall that is a 37% improvement over our initial attempt!
 
