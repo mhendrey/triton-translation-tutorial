@@ -126,7 +126,6 @@ class TritonPythonModel:
         for infer_seamless_response, (batch_id, chunk_id) in zip(
             inference_responses, batch_chunk_ids
         ):
-            # logger.log_warn(f"`translate`: Starting on {batch_id=:}, {chunk_id=:}")
             if infer_seamless_response.has_error() and responses[batch_id] is None:
                 err_msg = (
                     f"{chunk_id=:} had error: "
